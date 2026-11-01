@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>LiderCamp 2026-II</title>
+  <!--
+    Técnica SPA para GitHub Pages (spa-github-pages by Rafael Pedicini).
+    Redirige rutas de Vue Router al index.html codificando el path en ?/...
+    pathSegmentsToKeep = 1 → conserva /lider-camp/ como segmento base.
+  -->
+  <script>
+    var pathSegmentsToKeep = 1
+    var l = window.location
+    l.replace(
+      l.protocol + '//' + l.host + '/' +
+      l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+      l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+      (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+      l.hash
+    )
+  </script>
+</head>
+<body></body>
+</html>
