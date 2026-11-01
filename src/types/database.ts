@@ -1,7 +1,3 @@
-Connecting to aws-0-us-east-2.pooler.supabase.com 5432
-Generated TypeScript is unformatted. Format it with:
-  npx oxfmt <generated-file.ts>
-
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {

@@ -7,6 +7,10 @@ import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/lider-camp/',
+  build: {
+    chunkSizeWarningLimit: 1000,
+  },
   plugins: [
     tailwindcss(),
     vue(),

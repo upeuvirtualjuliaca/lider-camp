@@ -91,7 +91,7 @@ function medallaLabel(m: string | null) {
             v-for="eq in lista"
             :key="eq.equipo_id"
             class="border rounded-2xl p-4 shadow-sm cursor-pointer active:scale-[0.99] transition-all"
-            :class="estilos(eq.medalla).card"
+            :class="estilos(eq.medalla)!.card"
             @click="router.push(`/equipo/${eq.equipo_id}`)"
           >
             <!-- Fila superior -->
@@ -99,7 +99,7 @@ function medallaLabel(m: string | null) {
               <!-- Posición -->
               <span
                 class="text-2xl font-extrabold w-10 flex-shrink-0 text-center"
-                :class="estilos(eq.medalla).pos"
+                :class="estilos(eq.medalla)!.pos"
               >{{ eq.posicion }}</span>
 
               <!-- Color dot + nombre -->
@@ -114,7 +114,7 @@ function medallaLabel(m: string | null) {
               <!-- Medalla badge -->
               <span
                 class="text-xs font-bold px-2 py-1 rounded-full flex-shrink-0 flex items-center gap-1"
-                :class="estilos(eq.medalla).badge"
+                :class="estilos(eq.medalla)!.badge"
               >
                 {{ MEDALLA_EMOJI[eq.medalla ?? 'participacion'] }}
                 <span class="hidden sm:inline">{{ medallaLabel(eq.medalla) }}</span>
@@ -204,7 +204,7 @@ function medallaLabel(m: string | null) {
                 <td class="px-3 py-3">
                   <span
                     class="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full"
-                    :class="estilos(eq.medalla).badge"
+                    :class="estilos(eq.medalla)!.badge"
                   >
                     {{ MEDALLA_EMOJI[eq.medalla ?? 'participacion'] }}
                     {{ medallaLabel(eq.medalla) }}

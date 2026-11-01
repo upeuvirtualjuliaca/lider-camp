@@ -5,8 +5,15 @@ import {
   rankingPublicoService,
   fichaPublicaService,
   type PublicoRanking,
-  type PublicoFichaFila,
+  type PublicoFichaFila as PublicoFichaFilaBase,
 } from '@/modules/puntajes/services/puntajes.service'
+
+interface PublicoFichaFila extends PublicoFichaFilaBase {
+  criterio_codigo: string | null
+  componente: string | null
+  puntaje_max: number | null
+  puntaje: number | null
+}
 
 const route  = useRoute()
 const router = useRouter()
@@ -25,7 +32,7 @@ onMounted(async () => {
       fichaPublicaService.getPorEquipo(equipoId),
     ])
     resumen.value = res
-    ficha.value   = fich
+    ficha.value   = fich as PublicoFichaFila[]
   } catch (e: any) {
     error.value = e.message ?? 'Error al cargar la ficha'
   } finally {

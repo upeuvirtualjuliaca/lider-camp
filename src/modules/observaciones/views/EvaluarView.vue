@@ -430,8 +430,8 @@ function pctBar(c: number, t: number) {
                   class="ev-score-btn"
                   :class="[
                     filasEquipo.get(prog.id)?.puntaje === pts
-                      ? SCORE_COLOR[pts].active
-                      : SCORE_COLOR[pts].idle,
+                      ? SCORE_COLOR[pts]!.active
+                      : SCORE_COLOR[pts]!.idle,
                     { 'ev-score-btn--locked': diaCerrado },
                   ]"
                   :disabled="diaCerrado"
@@ -441,7 +441,7 @@ function pctBar(c: number, t: number) {
                   <span
                     v-if="filasEquipo.get(prog.id)?.puntaje === pts"
                     class="ev-score-label"
-                  >{{ SCORE_COLOR[pts].label }}</span>
+                  >{{ SCORE_COLOR[pts]!.label }}</span>
                 </button>
               </div>
 
@@ -553,8 +553,8 @@ function pctBar(c: number, t: number) {
                 class="ev-score-btn"
                 :class="[
                   filasCriterio.get(equipo.id)?.puntaje === pts
-                    ? SCORE_COLOR[pts].active
-                    : SCORE_COLOR[pts].idle,
+                    ? SCORE_COLOR[pts]!.active
+                    : SCORE_COLOR[pts]!.idle,
                   { 'ev-score-btn--locked': diaCerrado },
                 ]"
                 :disabled="diaCerrado"
@@ -562,7 +562,7 @@ function pctBar(c: number, t: number) {
               >
                 <span class="ev-score-num">{{ pts }}</span>
                 <span v-if="filasCriterio.get(equipo.id)?.puntaje === pts" class="ev-score-label">
-                  {{ SCORE_COLOR[pts].label }}
+                  {{ SCORE_COLOR[pts]!.label }}
                 </span>
               </button>
             </div>
@@ -768,7 +768,7 @@ function pctBar(c: number, t: number) {
             :key="pts"
             class="ev-rubrica-row"
           >
-            <span class="ev-rubrica-pts" :class="SCORE_COLOR[pts].active">{{ pts }}</span>
+            <span class="ev-rubrica-pts" :class="SCORE_COLOR[pts]!.active">{{ pts }}</span>
             <span class="ev-rubrica-desc">{{ DESCRIPTORES_RUBRICA[pts] }}</span>
           </div>
         </div>

@@ -131,7 +131,7 @@ function abrirNueva() {
   esEdicion.value = false
   actividadEditando.value = null
   form.value = {
-    criterio_id: opcionesCriterio.value.length === 1 ? opcionesCriterio.value[0].value : '',
+    criterio_id: opcionesCriterio.value.length === 1 ? opcionesCriterio.value[0]!.value : '',
     nombre: '',
     hora_inicio: '',
     lugar: '',

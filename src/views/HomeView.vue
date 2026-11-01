@@ -50,9 +50,9 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 
 // ── Touch swipe ───────────────────────────────────────────────────────────────
 let touchX = 0
-function onTouchStart(e: TouchEvent) { touchX = e.touches[0].clientX }
+function onTouchStart(e: TouchEvent) { touchX = e.touches[0]?.clientX ?? 0 }
 function onTouchEnd(e: TouchEvent) {
-  const diff = touchX - e.changedTouches[0].clientX
+  const diff = touchX - (e.changedTouches[0]?.clientX ?? 0)
   if (Math.abs(diff) > 40) {
     currentSlide.value = diff > 0
       ? (currentSlide.value + 1) % slides.length

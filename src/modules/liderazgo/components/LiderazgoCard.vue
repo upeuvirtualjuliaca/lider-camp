@@ -264,10 +264,10 @@ function cancelarMotivo(indId: string) {
         <p
           v-if="filas.get(ind.id)?.nivel !== null && filas.get(ind.id)?.nivel !== undefined"
           class="lid-desc-sel"
-          :style="{ color: nivelCfg(filas.get(ind.id)!.nivel!).color }"
+          :style="{ color: nivelCfg(filas.get(ind.id)!.nivel!)!.color }"
         >
           <i class="pi pi-check-circle" />
-          {{ nivelCfg(filas.get(ind.id)!.nivel!).desc }}
+          {{ nivelCfg(filas.get(ind.id)!.nivel!)!.desc }}
         </p>
 
         <!-- Panel motivo de cambio (inline) -->

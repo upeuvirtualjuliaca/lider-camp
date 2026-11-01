@@ -853,7 +853,7 @@ async function confirmarEliminarPlantilla() {
               <template v-else>
                 Ver criterios
                 <span v-if="itemsPorPlantilla[plantilla.id]" class="text-xs font-normal text-gray-400">
-                  ({{ new Set(itemsPorPlantilla[plantilla.id].map(i => i.criterio_id)).size }})
+                  ({{ new Set(itemsPorPlantilla[plantilla.id]!.map(i => i.criterio_id)).size }})
                 </span>
               </template>
             </button>

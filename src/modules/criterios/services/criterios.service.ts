@@ -78,7 +78,7 @@ export const programacionService = {
   async inicializar(campamentoId: string, sourceCampamentoId?: string): Promise<number> {
     const { data, error } = await supabase.rpc('inicializar_programacion_campamento', {
       p_campamento_id: campamentoId,
-      p_source_campamento_id: sourceCampamentoId ?? null,
+      p_source_campamento_id: sourceCampamentoId ?? undefined,
     })
     if (error) throw error
     return data as number
