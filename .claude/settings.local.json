@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(ls:*)",
+      "Bash(npx supabase:*)",
+      "Bash(grep -v \"^--$\")",
+      "Bash(npm run:*)",
+      "Bash(head -20 grep -n \"CREATE OR REPLACE FUNCTION\\\\|validar_evaluacion_liderazgo\\\\|fn_campamento\" \"D:/Projects/lider-camp/supabase/migrations/20261027222952_modulo6_liderazgo.sql\")",
+      "Bash(npm install:*)",
+      "Bash(npx vue-tsc:*)",
+      "Bash(grep -n \"v_incidencias_pendientes\\\\|v_bonus_equipo\\\\|v_demeritos_equipo\\\\|v_liderazgo_equipo_dia\" D:/Projects/lider-camp/supabase/migrations/*.sql)",
+      "Bash(__NEW_LINE_eb01ccba8fc18352__ done:*)",
+      "Bash(PGPASSWORD=xhu8EiDoGhs4zr5j psql \"postgresql://postgres.arnxtzamayflzptlkwxy@aws-0-us-east-2.pooler.supabase.com:5432/postgres\" -c \"\nDROP POLICY IF EXISTS \\\\\"anon puede leer categorias\\\\\" ON public.categorias_criterios;\nDROP POLICY IF EXISTS \\\\\"admin puede gestionar categorias\\\\\" ON public.categorias_criterios;\nDROP POLICY IF EXISTS \\\\\"todos pueden leer categorias\\\\\" ON public.categorias_criterios;\nDROP POLICY IF EXISTS \\\\\"admin puede insertar categorias\\\\\" ON public.categorias_criterios;\nDROP POLICY IF EXISTS \\\\\"admin puede actualizar categorias\\\\\" ON public.categorias_criterios;\nDROP POLICY IF EXISTS \\\\\"admin puede eliminar categorias\\\\\" ON public.categorias_criterios;\n\nCREATE POLICY \\\\\"todos pueden leer categorias\\\\\"\n  ON public.categorias_criterios FOR SELECT USING \\(true\\);\n\nCREATE POLICY \\\\\"admin puede insertar categorias\\\\\"\n  ON public.categorias_criterios FOR INSERT WITH CHECK \\(public.es_admin\\(\\)\\);\n\nCREATE POLICY \\\\\"admin puede actualizar categorias\\\\\"\n  ON public.categorias_criterios FOR UPDATE USING \\(public.es_admin\\(\\)\\);\n\nCREATE POLICY \\\\\"admin puede eliminar categorias\\\\\"\n  ON public.categorias_criterios FOR DELETE USING \\(public.es_admin\\(\\)\\);\n\" 2>&1)",
+      "Bash(psql \"postgresql://postgres.arnxtzamayflzptlkwxy:xhu8EiDoGhs4zr5j@aws-0-us-east-2.pooler.supabase.com:5432/postgres\" -c \"SELECT table_name FROM information_schema.views WHERE table_schema=''''public'''' ORDER BY table_name;\")",
+      "Bash(psql:*)",
+      "Bash(npx vite:*)",
+      "Bash(grep -r revisiones D:/Projects/lider-camp/src/router --include=*.ts -l)",
+      "Bash(grep -r revisiones D:/Projects/lider-camp/src/router --include=*.ts -n)",
+      "Bash(grep -v \"^$\")",
+      "Bash(find D:Projectslider-campsrc -type f \\\\\\(-name *layout* -o -name *sidebar* -o -name *nav* -o -name *drawer* -o -name *panel* -o -name *router* -o -name *route* \\\\\\))"
+    ]
+  }
+}
