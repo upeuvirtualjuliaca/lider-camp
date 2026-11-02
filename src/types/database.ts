@@ -22,7 +22,131 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "actividades": {
+            "actividad_criterios_eval": {
+                  Row: {
+                    "actividad_id": string,"created_at": string,"id": string,"nombre": string,"orden": number,"puntaje_max": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "actividad_id": string,"created_at"?: string,"id"?: string,"nombre": string,"orden"?: number,"puntaje_max": number,"updated_at"?: string
+                  }
+                  Update: {
+                    "actividad_id"?: string,"created_at"?: string,"id"?: string,"nombre"?: string,"orden"?: number,"puntaje_max"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "actividad_criterios_eval_actividad_id_fkey"
+      columns: ["actividad_id"]
+isOneToOne: false
+      referencedRelation: "actividades"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "actividad_criterios_eval_actividad_id_fkey"
+      columns: ["actividad_id"]
+isOneToOne: false
+      referencedRelation: "v_asistencia_equipo_actividad"
+      referencedColumns: ["actividad_id"]
+    }
+                  ]
+                },"actividad_eval_registros": {
+                  Row: {
+                    "actividad_id": string,"comentario": string | null,"created_at": string,"criterio_eval_id": string,"equipo_id": string,"evaluador_id": string,"id": string,"puntaje": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "actividad_id": string,"comentario"?: string | null,"created_at"?: string,"criterio_eval_id": string,"equipo_id": string,"evaluador_id": string,"id"?: string,"puntaje": number,"updated_at"?: string
+                  }
+                  Update: {
+                    "actividad_id"?: string,"comentario"?: string | null,"created_at"?: string,"criterio_eval_id"?: string,"equipo_id"?: string,"evaluador_id"?: string,"id"?: string,"puntaje"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "actividad_eval_registros_actividad_id_fkey"
+      columns: ["actividad_id"]
+isOneToOne: false
+      referencedRelation: "actividades"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_actividad_id_fkey"
+      columns: ["actividad_id"]
+isOneToOne: false
+      referencedRelation: "v_asistencia_equipo_actividad"
+      referencedColumns: ["actividad_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_criterio_eval_id_fkey"
+      columns: ["criterio_eval_id"]
+isOneToOne: false
+      referencedRelation: "actividad_criterios_eval"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "equipos"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "publico_equipos"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "publico_incidencias_resumen"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "publico_ranking"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "v_asistencia_equipo_actividad"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "v_asistencia_equipo_dia"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "v_inscripcion_equipo"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "v_liderazgo_equipo_dia"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "v_puntaje_equipo"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "v_puntaje_rubrica_equipo_dia"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_evaluador_id_fkey"
+      columns: ["evaluador_id"]
+isOneToOne: false
+      referencedRelation: "perfiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"actividades": {
                   Row: {
                     "created_at": string,"descripcion": string | null,"estado": string,"evaluador_id": string,"hora_inicio": string | null,"id": string,"lugar": string | null,"motivo_cancelacion": string | null,"nombre": string,"programacion_id": string,"updated_at": string
                   }
@@ -155,6 +279,12 @@ isOneToOne: false
       columns: ["criterio_id"]
 isOneToOne: false
       referencedRelation: "publico_calendario"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "campamento_criterios_criterio_id_fkey"
+      columns: ["criterio_id"]
+isOneToOne: false
+      referencedRelation: "publico_criterios"
       referencedColumns: ["id"]
     }
                   ]
@@ -847,6 +977,12 @@ isOneToOne: false
       referencedRelation: "publico_calendario"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "plantilla_items_criterio_id_fkey"
+      columns: ["criterio_id"]
+isOneToOne: false
+      referencedRelation: "publico_criterios"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "plantilla_items_plantilla_id_fkey"
       columns: ["plantilla_id"]
 isOneToOne: false
@@ -903,6 +1039,12 @@ isOneToOne: false
       columns: ["criterio_id"]
 isOneToOne: false
       referencedRelation: "publico_calendario"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "programacion_criterio_id_fkey"
+      columns: ["criterio_id"]
+isOneToOne: false
+      referencedRelation: "publico_criterios"
       referencedColumns: ["id"]
     }
                   ]
@@ -997,14 +1139,14 @@ isOneToOne: false
                   ]
                 },"publico_criterios": {
                   Row: {
-                    "abarca": string | null,"categoria": string,"codigo": string,"evidencia": string | null,"no_abarca": string | null,"nombre": string,"orden": number,"tipo_calculo": string
+                    "abarca": string | null,"categoria": string,"codigo": string,"evidencia": string | null,"id": string,"no_abarca": string | null,"nombre": string,"orden": number,"tipo_calculo": string
                   }
                   ComputedFields: never
                   Insert: {
-                           "abarca"?: string | null,"categoria"?: string | null,"codigo"?: string | null,"evidencia"?: string | null,"no_abarca"?: string | null,"nombre"?: string | null,"orden"?: number | null,"tipo_calculo"?: string | null
+                           "abarca"?: string | null,"categoria"?: string | null,"codigo"?: string | null,"evidencia"?: string | null,"id"?: string | null,"no_abarca"?: string | null,"nombre"?: string | null,"orden"?: number | null,"tipo_calculo"?: string | null
                          }
                         Update: {
-                           "abarca"?: string | null,"categoria"?: string | null,"codigo"?: string | null,"evidencia"?: string | null,"no_abarca"?: string | null,"nombre"?: string | null,"orden"?: number | null,"tipo_calculo"?: string | null
+                           "abarca"?: string | null,"categoria"?: string | null,"codigo"?: string | null,"evidencia"?: string | null,"id"?: string | null,"no_abarca"?: string | null,"nombre"?: string | null,"orden"?: number | null,"tipo_calculo"?: string | null
                          }
                         Relationships: [
                     {
@@ -1133,6 +1275,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "publico_calendario"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "programacion_criterio_id_fkey"
+      columns: ["criterio_id"]
+isOneToOne: false
+      referencedRelation: "publico_criterios"
+      referencedColumns: ["id"]
     }
                   ]
                 },"v_asistencia_equipo_dia": {
@@ -1152,6 +1300,12 @@ isOneToOne: false
       columns: ["criterio_id"]
 isOneToOne: false
       referencedRelation: "publico_calendario"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "programacion_criterio_id_fkey"
+      columns: ["criterio_id"]
+isOneToOne: false
+      referencedRelation: "publico_criterios"
       referencedColumns: ["id"]
     }
                   ]

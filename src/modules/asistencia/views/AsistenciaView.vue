@@ -7,10 +7,13 @@ import { equiposService, type Equipo } from '@/modules/equipos/services/equipos.
 import {
   actividadesService,
   asistenciaService,
+  criteriosEvalService,
+  evalRegistrosService,
   integrantesAsistenciaService,
   type ActividadConProgramacion,
   type RegistroConIntegrante,
   type AsistenciaEquipoActividad,
+  type CriterioEval,
 } from '@/modules/asistencia/services/asistencia.service'
 import { useSessionStore } from '@/modules/auth/store'
 import { useCampamentoStore } from '@/stores/campamento'
@@ -19,6 +22,18 @@ import type { Tables } from '@/types/database'
 // ── Tipos ────────────────────────────────────────────────────────────────────
 type EstadoAsistencia = 'presente' | 'ausente' | 'justificado'
 type EstadoGuardado   = 'idle' | 'guardando' | 'guardado' | 'error'
+
+interface FilaCriterio {
+  criterio: CriterioEval
+  puntaje: number | null
+  estadoGuardado: EstadoGuardado
+}
+
+interface FilaEquipoCriterio {
+  equipo: Equipo
+  puntaje: number | null
+  estadoGuardado: EstadoGuardado
+}
 
 interface FilaIntegrante {
   integrante: { id: string; nombres: string; apellidos: string; equipo_id: string }
@@ -45,10 +60,11 @@ const campStore = useCampamentoStore()
 const cargando  = ref(true)
 const error     = ref('')
 
-const dias       = ref<DiasEvaluacion[]>([])
-const equipos    = ref<Equipo[]>([])
-const paso       = ref<1 | 2 | 3>(1)
-const momentoActivo = ref<string>('')
+const dias                = ref<DiasEvaluacion[]>([])
+const equipos             = ref<Equipo[]>([])
+const paso                = ref<1 | 2 | 3>(1)
+const momentoActivo       = ref<string>('')
+const conteosActividades  = ref<Record<string, number>>({})
 
 // Paso 2
 const actividadesDia        = ref<ActividadConProgramacion[]>([])
@@ -56,11 +72,17 @@ const cargandoActividades   = ref(false)
 const actividadSeleccionada = ref<ActividadConProgramacion | null>(null)
 
 // Paso 3
-const equipoActivo       = ref<Equipo | null>(null)
-const busqueda           = ref('')
-const cargandoRegistros  = ref(false)
-const filasPorEquipo     = ref<Map<string, FilaIntegrante[]>>(new Map())
-const resumenPorEquipo   = ref<Map<string, AsistenciaEquipoActividad>>(new Map())
+const equipoActivo        = ref<Equipo | null>(null)
+const busqueda            = ref('')
+const cargandoRegistros   = ref(false)
+const filasPorEquipo      = ref<Map<string, FilaIntegrante[]>>(new Map())
+const resumenPorEquipo    = ref<Map<string, AsistenciaEquipoActividad>>(new Map())
+const criteriosActividad  = ref<CriterioEval[]>([])
+const criteriosPorEquipo  = ref<Map<string, FilaCriterio[]>>(new Map())
+const tabEval             = ref<'equipos' | 'criterios'>('equipos')
+const equipoEvalActivo    = ref<Equipo | null>(null)
+const criterioEvalActivo  = ref<CriterioEval | null>(null)
+const filasPorCriterio    = ref<Map<string, FilaEquipoCriterio[]>>(new Map())
 
 // Dialog justificación
 const dialogJust    = ref(false)
@@ -78,14 +100,18 @@ async function cargar() {
   filasPorEquipo.value  = new Map()
   resumenPorEquipo.value = new Map()
   try {
-    const [, diasData, equiposData] = await Promise.all([
+    const [, diasData, equiposData, conteos] = await Promise.all([
       cargarCampamento(),
       cargarDias(),
       equiposService.getTodos(campStore.selectedId ?? undefined),
+      campStore.selectedId
+        ? actividadesService.getConteosPorCampamento(campStore.selectedId)
+        : Promise.resolve({} as Record<string, number>),
     ])
-    momentoActivo.value = detectarMomentoActual()
-    dias.value    = diasData
-    equipos.value = equiposData.filter((e) => e.activo)
+    momentoActivo.value      = detectarMomentoActual()
+    dias.value               = diasData
+    equipos.value            = equiposData.filter((e) => e.activo)
+    conteosActividades.value = conteos
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Error al cargar datos'
   } finally {
@@ -156,6 +182,8 @@ function pctCompleto(): number {
   return Math.round(((t - contarSinRegistro.value) / t) * 100)
 }
 
+const tieneCriterios = computed(() => criteriosActividad.value.length > 0)
+
 // ── Pasos ─────────────────────────────────────────────────────────────────────
 async function seleccionarDia(m: string) {
   momentoActivo.value = m
@@ -176,11 +204,51 @@ async function seleccionarDia(m: string) {
 async function seleccionarActividad(act: ActividadConProgramacion) {
   if (act.estado === 'cancelada') return
   actividadSeleccionada.value = act
-  filasPorEquipo.value  = new Map()
-  resumenPorEquipo.value = new Map()
+  filasPorEquipo.value     = new Map()
+  resumenPorEquipo.value   = new Map()
+  criteriosPorEquipo.value = new Map()
+  filasPorCriterio.value   = new Map()
+  tabEval.value            = 'equipos'
+  equipoEvalActivo.value   = null
+  criterioEvalActivo.value = null
   paso.value = 3
-  const primero = equipos.value[0]
-  if (primero) await seleccionarEquipo(primero)
+
+  criteriosActividad.value = await criteriosEvalService.getPorActividad(act.id)
+  if (criteriosActividad.value.length) {
+    const records = await evalRegistrosService.getPorActividad(act.id)
+
+    // criteriosPorEquipo: equipo_id → FilaCriterio[]
+    const mapEq = new Map<string, FilaCriterio[]>()
+    for (const eq of equipos.value) {
+      const recMap = new Map(
+        records.filter((r) => r.equipo_id === eq.id).map((r) => [r.criterio_eval_id, Number(r.puntaje)])
+      )
+      mapEq.set(eq.id, criteriosActividad.value.map((c) => ({
+        criterio: c,
+        puntaje: recMap.has(c.id) ? recMap.get(c.id)! : null,
+        estadoGuardado: 'idle' as EstadoGuardado,
+      })))
+    }
+    criteriosPorEquipo.value = mapEq
+
+    // filasPorCriterio: criterio_id → FilaEquipoCriterio[]
+    const mapCrit = new Map<string, FilaEquipoCriterio[]>()
+    for (const c of criteriosActividad.value) {
+      const recMap = new Map(
+        records.filter((r) => r.criterio_eval_id === c.id).map((r) => [r.equipo_id, Number(r.puntaje)])
+      )
+      mapCrit.set(c.id, equipos.value.map((eq) => ({
+        equipo: eq,
+        puntaje: recMap.has(eq.id) ? recMap.get(eq.id)! : null,
+        estadoGuardado: 'idle' as EstadoGuardado,
+      })))
+    }
+    filasPorCriterio.value = mapCrit
+  } else {
+    // No criteria — load attendance for first team
+    const primero = equipos.value[0]
+    if (primero) await seleccionarEquipo(primero)
+  }
 }
 
 function volverPaso(n: 1 | 2) {
@@ -188,15 +256,27 @@ function volverPaso(n: 1 | 2) {
     paso.value = 1
     actividadesDia.value = []
     actividadSeleccionada.value = null
-    filasPorEquipo.value  = new Map()
-    resumenPorEquipo.value = new Map()
-    equipoActivo.value = null
+    filasPorEquipo.value     = new Map()
+    resumenPorEquipo.value   = new Map()
+    criteriosPorEquipo.value = new Map()
+    criteriosActividad.value = []
+    filasPorCriterio.value   = new Map()
+    tabEval.value            = 'equipos'
+    equipoEvalActivo.value   = null
+    criterioEvalActivo.value = null
+    equipoActivo.value       = null
   } else {
     paso.value = 2
     actividadSeleccionada.value = null
-    filasPorEquipo.value  = new Map()
-    resumenPorEquipo.value = new Map()
-    equipoActivo.value = null
+    filasPorEquipo.value     = new Map()
+    resumenPorEquipo.value   = new Map()
+    criteriosPorEquipo.value = new Map()
+    criteriosActividad.value = []
+    filasPorCriterio.value   = new Map()
+    tabEval.value            = 'equipos'
+    equipoEvalActivo.value   = null
+    criterioEvalActivo.value = null
+    equipoActivo.value       = null
   }
 }
 
@@ -296,6 +376,69 @@ async function todosPresentes() {
   }
 }
 
+// ── Evaluación por criterios ──────────────────────────────────────────────────
+/** Genera pasos de 5 desde 0 hasta puntaje_max (inclusive). */
+function stepsCriterio(puntajeMax: number | string): number[] {
+  const max = Number(puntajeMax)
+  const steps: number[] = []
+  for (let i = 0; i <= max; i += 5) steps.push(i)
+  if (steps[steps.length - 1] !== max) steps.push(max)
+  return steps
+}
+
+/** Devuelve clases CSS idle/active para el botón según su posición relativa al máximo. */
+function colorCritBtn(pts: number, max: number): { idle: string; active: string } {
+  if (pts === 0)   return { idle: 'crit-btn--0-idle',    active: 'crit-btn--0-act'    }
+  if (pts === max) return { idle: 'crit-btn--max-idle',  active: 'crit-btn--max-act'  }
+  const pct = pts / max
+  if (pct <= 0.33) return { idle: 'crit-btn--low-idle',  active: 'crit-btn--low-act'  }
+  if (pct <= 0.66) return { idle: 'crit-btn--mid-idle',  active: 'crit-btn--mid-act'  }
+  return              { idle: 'crit-btn--high-idle', active: 'crit-btn--high-act' }
+}
+
+async function guardarEval(
+  criterioId: string,
+  equipoId: string,
+  puntaje: number,
+  filaRef: { estadoGuardado: EstadoGuardado },
+) {
+  if (!actividadSeleccionada.value) return
+  filaRef.estadoGuardado = 'guardando'
+  try {
+    await evalRegistrosService.upsert({
+      actividad_id:     actividadSeleccionada.value.id,
+      criterio_eval_id: criterioId,
+      equipo_id:        equipoId,
+      puntaje,
+      evaluador_id:     session.user!.id,
+    })
+    filaRef.estadoGuardado = 'guardado'
+    setTimeout(() => { if (filaRef.estadoGuardado === 'guardado') filaRef.estadoGuardado = 'idle' }, 2000)
+    // Sync criteriosPorEquipo
+    const cf = criteriosPorEquipo.value.get(equipoId)?.find((f) => f.criterio.id === criterioId)
+    if (cf) cf.puntaje = puntaje
+    // Sync filasPorCriterio
+    const ef = filasPorCriterio.value.get(criterioId)?.find((f) => f.equipo.id === equipoId)
+    if (ef) ef.puntaje = puntaje
+  } catch {
+    filaRef.estadoGuardado = 'error'
+  }
+}
+
+function progresoEquipoEval(equipoId: string) {
+  const filas = criteriosPorEquipo.value.get(equipoId) ?? []
+  return { calificados: filas.filter((f) => f.puntaje !== null).length, total: filas.length }
+}
+
+function progresoCriterioEval(criterioId: string) {
+  const filas = filasPorCriterio.value.get(criterioId) ?? []
+  return { calificados: filas.filter((f) => f.puntaje !== null).length, total: filas.length }
+}
+
+function pctBarEval(calificados: number, total: number) {
+  return total === 0 ? 0 : Math.round((calificados / total) * 100)
+}
+
 // ── CSS helpers ───────────────────────────────────────────────────────────────
 function filaClass(fila: FilaIntegrante) {
   if (fila.estado === 'presente')    return 'ast-fila--presente'
@@ -339,12 +482,25 @@ function filaClass(fila: FilaIntegrante) {
             v-for="m in momentos"
             :key="m"
             class="ast-dia-card"
-            :class="{ 'ast-dia-card--locked': dias.find((d) => d.momento === m)?.cerrado }"
+            :class="{
+              'ast-dia-card--locked':    dias.find((d) => d.momento === m)?.cerrado,
+              'ast-dia-card--sin-act':   !conteosActividades[m],
+            }"
             @click="seleccionarDia(m)"
           >
             <span class="ast-dia-card__letter">{{ m }}</span>
             <span class="ast-dia-card__label">{{ labelDia(m) }}</span>
             <span class="ast-dia-card__date">{{ fechas[m] ?? '' }}</span>
+
+            <!-- Conteo de actividades -->
+            <span v-if="conteosActividades[m]" class="ast-dia-card__acts">
+              <i class="pi pi-calendar-check" />
+              {{ conteosActividades[m] }} actividad{{ conteosActividades[m] === 1 ? '' : 'es' }}
+            </span>
+            <span v-else class="ast-dia-card__no-acts">
+              <i class="pi pi-exclamation-triangle" /> Sin actividades
+            </span>
+
             <span
               v-if="dias.find((d) => d.momento === m)?.cerrado"
               class="ast-dia-card__lock"
@@ -434,13 +590,18 @@ function filaClass(fila: FilaIntegrante) {
         <div v-else class="ast-empty">
           <i class="pi pi-calendar-times" />
           <p>No hay actividades para este día</p>
+          <p class="ast-empty__hint">
+            Ve a <strong>Actividades</strong> y crea al menos una actividad para
+            <strong>{{ labelDia(momentoActivo) }}</strong>.
+          </p>
         </div>
       </template>
 
       <!-- ══════════════════════════════════════════════
-           PASO 3 — Registrar asistencia
+           PASO 3 — Evaluación / Asistencia
       ══════════════════════════════════════════════ -->
       <template v-else-if="paso === 3 && actividadSeleccionada">
+
         <!-- Header -->
         <div class="ast-step-header">
           <button class="ast-back" @click="volverPaso(2)">
@@ -456,134 +617,313 @@ function filaClass(fila: FilaIntegrante) {
           <i class="pi pi-lock" /> Día cerrado — solo lectura
         </div>
 
-        <!-- Selector de equipos -->
-        <div class="ast-eq-scroll-wrap">
-          <div class="ast-eq-scroll">
-            <button
-              v-for="eq in equipos"
-              :key="eq.id"
-              class="ast-eq-chip"
-              :class="{ 'ast-eq-chip--active': equipoActivo?.id === eq.id }"
-              :style="equipoActivo?.id === eq.id
-                ? { borderColor: eq.color, background: eq.color + '22', color: eq.color }
-                : {}"
-              @click="seleccionarEquipo(eq)"
-            >
-              <span class="ast-eq-dot" :style="{ background: eq.color }" />
-              <span>{{ eq.nombre }}</span>
-            </button>
-          </div>
-        </div>
+        <!-- ══ CON CRITERIOS: estructura tipo EvaluarView ══ -->
+        <template v-if="tieneCriterios">
 
-        <!-- Resumen sticky del equipo activo -->
-        <div v-if="equipoActivo" class="ast-resumen-bar">
-          <!-- Barra de progreso de registro -->
-          <div class="ast-resumen-bar__progress">
-            <div class="ast-resumen-bar__fill" :style="{ width: pctCompleto() + '%' }" />
-          </div>
-          <div class="ast-resumen-bar__stats">
-            <div class="ast-stat">
-              <span class="ast-stat__val ast-stat__val--green">{{ contarPresentes }}</span>
-              <span class="ast-stat__lbl">Presentes</span>
-            </div>
-            <div class="ast-stat">
-              <span class="ast-stat__val ast-stat__val--red">{{ contarAusentes }}</span>
-              <span class="ast-stat__lbl">Ausentes</span>
-            </div>
-            <div class="ast-stat">
-              <span class="ast-stat__val ast-stat__val--yellow">{{ contarJustificados }}</span>
-              <span class="ast-stat__lbl">Just.</span>
-            </div>
-            <div class="ast-stat">
-              <span class="ast-stat__val ast-stat__val--gray">{{ contarSinRegistro }}</span>
-              <span class="ast-stat__lbl">Pendiente</span>
-            </div>
-          </div>
-          <div v-if="formulaTexto" class="ast-resumen-bar__formula">
-            <i class="pi pi-calculator" /> {{ formulaTexto }}
-          </div>
-        </div>
-
-        <!-- Toolbar -->
-        <div class="ast-toolbar">
-          <div class="ast-search-wrap">
-            <i class="pi pi-search ast-search-icon" />
-            <input
-              v-model="busqueda"
-              class="ast-search"
-              placeholder="Buscar integrante…"
-              type="search"
-            />
-          </div>
-          <button
-            class="ast-btn-all-present"
-            :disabled="diaCerrado || !equipoActivo || contarSinRegistro === 0"
-            @click="todosPresentes"
-          >
-            <i class="pi pi-check-circle" />
-            <span>Todos presentes</span>
-          </button>
-        </div>
-
-        <!-- Cargando registros -->
-        <div v-if="cargandoRegistros" class="ast-loading-inline">
-          <div class="ast-loading__ring ast-loading__ring--sm" />
-          <span>Cargando integrantes…</span>
-        </div>
-
-        <!-- Lista de integrantes -->
-        <div v-else-if="filasFiltradas.length" class="ast-filas">
-          <div
-            v-for="fila in filasFiltradas"
-            :key="fila.integrante.id"
-            class="ast-fila"
-            :class="filaClass(fila)"
-          >
-            <!-- Cabecera de la fila -->
-            <div class="ast-fila__header">
-              <div class="ast-fila__nombre-wrap">
-                <span class="ast-fila__nombre">
-                  {{ fila.integrante.apellidos }}, {{ fila.integrante.nombres }}
-                </span>
-                <span v-if="fila.estado === 'justificado' && fila.motivo_justificacion" class="ast-fila__motivo">
-                  <i class="pi pi-file-edit" /> {{ fila.motivo_justificacion }}
-                  <span v-if="fila.documentado" class="ast-fila__doc"><i class="pi pi-paperclip" /> Doc.</span>
+          <!-- DETALLE: Equipo → sus criterios -->
+          <template v-if="tabEval === 'equipos' && equipoEvalActivo">
+            <div class="ast-eval-dh">
+              <button class="ast-back" @click="equipoEvalActivo = null">
+                <i class="pi pi-arrow-left" />
+              </button>
+              <span class="ast-eval-dot" :style="{ background: equipoEvalActivo.color }" />
+              <div class="ast-eval-dh__info">
+                <span class="ast-eval-dh__name">{{ equipoEvalActivo.nombre }}</span>
+                <span class="ast-eval-dh__sub">
+                  {{ progresoEquipoEval(equipoEvalActivo.id).calificados }}/{{ progresoEquipoEval(equipoEvalActivo.id).total }} criterios
                 </span>
               </div>
-              <!-- Indicador guardado -->
-              <span class="ast-save-indicator">
-                <span v-if="fila.estadoGuardado === 'guardando'" class="ast-save-ring" />
-                <span v-else-if="fila.estadoGuardado === 'guardado'" class="ast-save-ok"><i class="pi pi-check" /></span>
-                <span v-else-if="fila.estadoGuardado === 'error'"   class="ast-save-err"><i class="pi pi-times" /></span>
-              </span>
+            </div>
+            <div class="ast-cc-cards">
+              <div
+                v-for="fila in (criteriosPorEquipo.get(equipoEvalActivo.id) ?? [])"
+                :key="fila.criterio.id"
+                class="ast-cc-card"
+                :class="{ 'ast-cc-card--done': fila.puntaje !== null }"
+              >
+                <div class="ast-cc-header">
+                  <span class="ast-cc-nombre">{{ fila.criterio.nombre }}</span>
+                  <div class="ast-cc-actions">
+                    <span class="ast-cc-max">máx {{ fila.criterio.puntaje_max }}</span>
+                    <span v-if="fila.estadoGuardado === 'guardando'" class="ast-cc-save ast-cc-save--spin" />
+                    <span v-else-if="fila.estadoGuardado === 'guardado'" class="ast-cc-save ast-cc-save--ok"><i class="pi pi-check" /></span>
+                    <span v-else-if="fila.estadoGuardado === 'error'"   class="ast-cc-save ast-cc-save--err"><i class="pi pi-times" /></span>
+                  </div>
+                </div>
+                <div class="ast-cc-scores">
+                  <button
+                    v-for="pts in stepsCriterio(fila.criterio.puntaje_max)"
+                    :key="pts"
+                    class="ast-cc-btn"
+                    :class="[
+                      fila.puntaje === pts
+                        ? colorCritBtn(pts, Number(fila.criterio.puntaje_max)).active
+                        : colorCritBtn(pts, Number(fila.criterio.puntaje_max)).idle,
+                      { 'ast-cc-btn--locked': diaCerrado },
+                    ]"
+                    :disabled="diaCerrado"
+                    @click="fila.puntaje = pts; guardarEval(fila.criterio.id, equipoEvalActivo!.id, pts, fila)"
+                  >
+                    <span class="ast-cc-btn-num">{{ pts }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- DETALLE: Criterio → todos los equipos -->
+          <template v-else-if="tabEval === 'criterios' && criterioEvalActivo">
+            <div class="ast-eval-dh">
+              <button class="ast-back" @click="criterioEvalActivo = null">
+                <i class="pi pi-arrow-left" />
+              </button>
+              <div class="ast-eval-dh__info">
+                <span class="ast-eval-dh__name">{{ criterioEvalActivo.nombre }}</span>
+                <span class="ast-eval-dh__sub">máx {{ criterioEvalActivo.puntaje_max }} pts</span>
+              </div>
+            </div>
+            <div class="ast-cc-cards">
+              <div
+                v-for="fila in (filasPorCriterio.get(criterioEvalActivo.id) ?? [])"
+                :key="fila.equipo.id"
+                class="ast-cc-card"
+                :class="{ 'ast-cc-card--done': fila.puntaje !== null }"
+              >
+                <div class="ast-cc-header">
+                  <span class="ast-eval-dot ast-eval-dot--sm" :style="{ background: fila.equipo.color }" />
+                  <span class="ast-cc-nombre">{{ fila.equipo.nombre }}</span>
+                  <div class="ast-cc-actions">
+                    <span v-if="fila.estadoGuardado === 'guardando'" class="ast-cc-save ast-cc-save--spin" />
+                    <span v-else-if="fila.estadoGuardado === 'guardado'" class="ast-cc-save ast-cc-save--ok"><i class="pi pi-check" /></span>
+                    <span v-else-if="fila.estadoGuardado === 'error'"   class="ast-cc-save ast-cc-save--err"><i class="pi pi-times" /></span>
+                  </div>
+                </div>
+                <div class="ast-cc-scores">
+                  <button
+                    v-for="pts in stepsCriterio(criterioEvalActivo.puntaje_max)"
+                    :key="pts"
+                    class="ast-cc-btn"
+                    :class="[
+                      fila.puntaje === pts
+                        ? colorCritBtn(pts, Number(criterioEvalActivo.puntaje_max)).active
+                        : colorCritBtn(pts, Number(criterioEvalActivo.puntaje_max)).idle,
+                      { 'ast-cc-btn--locked': diaCerrado },
+                    ]"
+                    :disabled="diaCerrado"
+                    @click="fila.puntaje = pts; guardarEval(criterioEvalActivo!.id, fila.equipo.id, pts, fila)"
+                  >
+                    <span class="ast-cc-btn-num">{{ pts }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- LISTA: tabs Por equipo / Por criterio -->
+          <template v-else>
+            <div class="ast-eval-tabs">
+              <button
+                class="ast-eval-tab"
+                :class="{ 'ast-eval-tab--active': tabEval === 'equipos' }"
+                @click="tabEval = 'equipos'"
+              >
+                <i class="pi pi-users" /><span>Por equipo</span>
+              </button>
+              <button
+                class="ast-eval-tab"
+                :class="{ 'ast-eval-tab--active': tabEval === 'criterios' }"
+                @click="tabEval = 'criterios'"
+              >
+                <i class="pi pi-list-check" /><span>Por criterio</span>
+              </button>
             </div>
 
-            <!-- Botones de estado -->
-            <div class="ast-estado-btns">
+            <!-- Tab: Equipos -->
+            <div v-if="tabEval === 'equipos'" class="ast-eval-list">
               <button
-                v-for="(cfg, key) in ESTADO_CFG"
-                :key="key"
-                class="ast-eb"
-                :class="fila.estado === key ? cfg.active : cfg.idle"
-                :disabled="diaCerrado"
-                @click="marcarEstado(fila, key as EstadoAsistencia)"
+                v-for="eq in equipos"
+                :key="eq.id"
+                class="ast-eval-eq-card"
+                @click="equipoEvalActivo = eq"
               >
-                <i :class="cfg.icon" />
-                <span>{{ cfg.label }}</span>
+                <span class="ast-eval-eq-strip" :style="{ background: eq.color }" />
+                <div class="ast-eval-eq-body">
+                  <div class="ast-eval-eq-top">
+                    <span class="ast-eval-eq-name">{{ eq.nombre }}</span>
+                    <span
+                      class="ast-eval-eq-badge"
+                      :class="{ 'ast-eval-eq-badge--done': progresoEquipoEval(eq.id).calificados === progresoEquipoEval(eq.id).total && progresoEquipoEval(eq.id).total > 0 }"
+                    >
+                      {{ progresoEquipoEval(eq.id).calificados }}/{{ progresoEquipoEval(eq.id).total }}
+                    </span>
+                  </div>
+                  <div class="ast-eval-bar">
+                    <div
+                      class="ast-eval-bar__fill"
+                      :style="{
+                        width: pctBarEval(progresoEquipoEval(eq.id).calificados, progresoEquipoEval(eq.id).total) + '%',
+                        background: eq.color,
+                      }"
+                    />
+                  </div>
+                </div>
+                <i class="pi pi-chevron-right ast-eval-chevron" />
+              </button>
+            </div>
+
+            <!-- Tab: Criterios -->
+            <div v-else class="ast-eval-list">
+              <button
+                v-for="c in criteriosActividad"
+                :key="c.id"
+                class="ast-eval-crit-row"
+                @click="criterioEvalActivo = c"
+              >
+                <div class="ast-eval-cr-left">
+                  <span class="ast-eval-cr-name">{{ c.nombre }}</span>
+                  <span class="ast-eval-cr-max">/ {{ c.puntaje_max }} pts</span>
+                </div>
+                <span
+                  class="ast-eval-cr-chip"
+                  :class="{ 'ast-eval-cr-chip--done': progresoCriterioEval(c.id).calificados === progresoCriterioEval(c.id).total && progresoCriterioEval(c.id).total > 0 }"
+                >
+                  {{ progresoCriterioEval(c.id).calificados }}/{{ progresoCriterioEval(c.id).total }}
+                </span>
+                <i class="pi pi-chevron-right ast-eval-chevron" />
+              </button>
+            </div>
+          </template>
+
+        </template>
+
+        <!-- ══ SIN CRITERIOS: asistencia normal ══ -->
+        <template v-else>
+
+          <!-- Selector de equipos -->
+          <div class="ast-eq-scroll-wrap">
+            <div class="ast-eq-scroll">
+              <button
+                v-for="eq in equipos"
+                :key="eq.id"
+                class="ast-eq-chip"
+                :class="{ 'ast-eq-chip--active': equipoActivo?.id === eq.id }"
+                :style="equipoActivo?.id === eq.id
+                  ? { borderColor: eq.color, background: eq.color + '22', color: eq.color }
+                  : {}"
+                @click="seleccionarEquipo(eq)"
+              >
+                <span class="ast-eq-dot" :style="{ background: eq.color }" />
+                <span>{{ eq.nombre }}</span>
               </button>
             </div>
           </div>
-        </div>
 
-        <div v-else-if="!cargandoRegistros && equipoActivo" class="ast-empty">
-          <i class="pi pi-inbox" />
-          <p>No hay integrantes en este equipo</p>
-        </div>
+          <!-- Resumen sticky del equipo activo -->
+          <div v-if="equipoActivo" class="ast-resumen-bar">
+            <div class="ast-resumen-bar__progress">
+              <div class="ast-resumen-bar__fill" :style="{ width: pctCompleto() + '%' }" />
+            </div>
+            <div class="ast-resumen-bar__stats">
+              <div class="ast-stat">
+                <span class="ast-stat__val ast-stat__val--green">{{ contarPresentes }}</span>
+                <span class="ast-stat__lbl">Presentes</span>
+              </div>
+              <div class="ast-stat">
+                <span class="ast-stat__val ast-stat__val--red">{{ contarAusentes }}</span>
+                <span class="ast-stat__lbl">Ausentes</span>
+              </div>
+              <div class="ast-stat">
+                <span class="ast-stat__val ast-stat__val--yellow">{{ contarJustificados }}</span>
+                <span class="ast-stat__lbl">Just.</span>
+              </div>
+              <div class="ast-stat">
+                <span class="ast-stat__val ast-stat__val--gray">{{ contarSinRegistro }}</span>
+                <span class="ast-stat__lbl">Pendiente</span>
+              </div>
+            </div>
+            <div v-if="formulaTexto" class="ast-resumen-bar__formula">
+              <i class="pi pi-calculator" /> {{ formulaTexto }}
+            </div>
+          </div>
 
-        <div v-else-if="!equipoActivo" class="ast-empty">
-          <i class="pi pi-arrow-up" />
-          <p>Selecciona un equipo arriba</p>
-        </div>
+          <!-- Toolbar -->
+          <div class="ast-toolbar">
+            <div class="ast-search-wrap">
+              <i class="pi pi-search ast-search-icon" />
+              <input
+                v-model="busqueda"
+                class="ast-search"
+                placeholder="Buscar integrante…"
+                type="search"
+              />
+            </div>
+            <button
+              class="ast-btn-all-present"
+              :disabled="diaCerrado || !equipoActivo || contarSinRegistro === 0"
+              @click="todosPresentes"
+            >
+              <i class="pi pi-check-circle" />
+              <span>Todos presentes</span>
+            </button>
+          </div>
+
+          <!-- Cargando registros -->
+          <div v-if="cargandoRegistros" class="ast-loading-inline">
+            <div class="ast-loading__ring ast-loading__ring--sm" />
+            <span>Cargando integrantes…</span>
+          </div>
+
+          <!-- Lista de integrantes -->
+          <div v-else-if="filasFiltradas.length" class="ast-filas">
+            <div
+              v-for="fila in filasFiltradas"
+              :key="fila.integrante.id"
+              class="ast-fila"
+              :class="filaClass(fila)"
+            >
+              <div class="ast-fila__header">
+                <div class="ast-fila__nombre-wrap">
+                  <span class="ast-fila__nombre">
+                    {{ fila.integrante.apellidos }}, {{ fila.integrante.nombres }}
+                  </span>
+                  <span v-if="fila.estado === 'justificado' && fila.motivo_justificacion" class="ast-fila__motivo">
+                    <i class="pi pi-file-edit" /> {{ fila.motivo_justificacion }}
+                    <span v-if="fila.documentado" class="ast-fila__doc"><i class="pi pi-paperclip" /> Doc.</span>
+                  </span>
+                </div>
+                <span class="ast-save-indicator">
+                  <span v-if="fila.estadoGuardado === 'guardando'" class="ast-save-ring" />
+                  <span v-else-if="fila.estadoGuardado === 'guardado'" class="ast-save-ok"><i class="pi pi-check" /></span>
+                  <span v-else-if="fila.estadoGuardado === 'error'"   class="ast-save-err"><i class="pi pi-times" /></span>
+                </span>
+              </div>
+              <div class="ast-estado-btns">
+                <button
+                  v-for="(cfg, key) in ESTADO_CFG"
+                  :key="key"
+                  class="ast-eb"
+                  :class="fila.estado === key ? cfg.active : cfg.idle"
+                  :disabled="diaCerrado"
+                  @click="marcarEstado(fila, key as EstadoAsistencia)"
+                >
+                  <i :class="cfg.icon" />
+                  <span>{{ cfg.label }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-else-if="!cargandoRegistros && equipoActivo" class="ast-empty">
+            <i class="pi pi-inbox" />
+            <p>No hay integrantes en este equipo</p>
+          </div>
+
+          <div v-else-if="!equipoActivo" class="ast-empty">
+            <i class="pi pi-arrow-up" />
+            <p>Selecciona un equipo arriba</p>
+          </div>
+
+        </template>
 
       </template>
     </template>
@@ -673,6 +1013,17 @@ function filaClass(fila: FilaIntegrante) {
 }
 .ast-empty .pi { font-size: 2.2rem; opacity: 0.5; }
 .ast-empty p { font-size: 0.88rem; }
+.ast-empty__hint {
+  font-size: 0.8rem !important;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 0.5rem 0.875rem;
+  margin-top: 0.25rem;
+  text-align: center;
+  max-width: 280px;
+}
 
 /* Back button */
 .ast-back {
@@ -746,6 +1097,35 @@ function filaClass(fila: FilaIntegrante) {
 .ast-dia-card__chevron {
   position: absolute; right: 0.75rem; top: 50%;
   transform: translateY(-50%); color: #cbd5e1; font-size: 0.7rem;
+}
+
+.ast-dia-card__acts {
+  display: flex; align-items: center; gap: 0.25rem;
+  font-size: 0.68rem; font-weight: 700;
+  background: #dcfce7; color: #16a34a;
+  border-radius: 6px; padding: 0.15rem 0.45rem;
+  margin-top: 0.2rem;
+}
+.ast-dia-card__acts .pi { font-size: 0.65rem; }
+
+.ast-dia-card__no-acts {
+  display: flex; align-items: center; gap: 0.25rem;
+  font-size: 0.66rem; font-weight: 700;
+  background: #fef3c7; color: #b45309;
+  border-radius: 6px; padding: 0.15rem 0.45rem;
+  margin-top: 0.2rem;
+  text-align: center;
+}
+.ast-dia-card__no-acts .pi { font-size: 0.65rem; }
+
+.ast-dia-card--sin-act {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+.ast-dia-card--sin-act:hover {
+  border-color: #f59e0b;
+  background: #fef3c7;
+  box-shadow: 0 4px 12px rgba(245,158,11,.15);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1044,6 +1424,184 @@ function filaClass(fila: FilaIntegrante) {
   cursor: pointer; transition: all 0.15s; min-height: 40px;
 }
 .ast-btn-sec:hover { background: #f8fafc; }
+
+/* ═══════════════════════════════════════════════════════════
+   CRITERIOS — TARJETAS (misma estructura que EvaluarView)
+═══════════════════════════════════════════════════════════ */
+.ast-cc-cards {
+  display: flex; flex-direction: column;
+  gap: 0.625rem; padding: 0 1rem;
+}
+
+.ast-cc-card {
+  background: white;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 0.875rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  transition: border-color 0.15s;
+}
+.ast-cc-card--done {
+  border-color: #bbf7d0;
+  background: #fafffe;
+}
+
+.ast-cc-header {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin-bottom: 0.625rem;
+}
+.ast-cc-nombre {
+  flex: 1; min-width: 0;
+  font-size: 0.9rem; font-weight: 600; color: #1e293b;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ast-cc-actions {
+  display: flex; align-items: center; gap: 0.4rem; flex-shrink: 0;
+}
+.ast-cc-max {
+  font-size: 0.72rem; font-weight: 600;
+  background: #f1f5f9; color: #64748b;
+  border-radius: 6px; padding: 0.1rem 0.45rem;
+}
+.ast-cc-save {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.72rem; flex-shrink: 0;
+}
+.ast-cc-save--spin {
+  border: 2.5px solid #dcfce7; border-top-color: #16a34a;
+  animation: spin .7s linear infinite;
+}
+.ast-cc-save--ok  { background: #dcfce7; color: #16a34a; }
+.ast-cc-save--err { background: #fee2e2; color: #dc2626; }
+
+/* ── Botones de puntaje ── */
+.ast-cc-scores {
+  display: flex; gap: 0.35rem;
+}
+.ast-cc-btn {
+  flex: 1;
+  min-height: 52px;
+  border-radius: 10px; border: 2px solid transparent;
+  cursor: pointer; transition: all 0.15s;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 0.2rem 0.1rem; line-height: 1.1;
+}
+.ast-cc-btn--locked { opacity: 0.45; cursor: not-allowed; }
+.ast-cc-btn-num {
+  font-size: 0.95rem; font-weight: 800; display: block;
+}
+
+/* Idle */
+.crit-btn--0-idle    { background: #fef2f2; border-color: #fecaca; color: #ef4444; }
+.crit-btn--low-idle  { background: #fff7ed; border-color: #fed7aa; color: #f97316; }
+.crit-btn--mid-idle  { background: #fefce8; border-color: #fef08a; color: #ca8a04; }
+.crit-btn--high-idle { background: #eff6ff; border-color: #bfdbfe; color: #3b82f6; }
+.crit-btn--max-idle  { background: #f0fdf4; border-color: #bbf7d0; color: #16a34a; }
+
+/* Active */
+.crit-btn--0-act    { background: #ef4444; border-color: #ef4444; color: white; box-shadow: 0 2px 8px #ef444440; transform: scale(1.04); }
+.crit-btn--low-act  { background: #f97316; border-color: #f97316; color: white; box-shadow: 0 2px 8px #f9731640; transform: scale(1.04); }
+.crit-btn--mid-act  { background: #eab308; border-color: #eab308; color: white; box-shadow: 0 2px 8px #eab30840; transform: scale(1.04); }
+.crit-btn--high-act { background: #3b82f6; border-color: #3b82f6; color: white; box-shadow: 0 2px 8px #3b82f640; transform: scale(1.04); }
+.crit-btn--max-act  { background: #16a34a; border-color: #16a34a; color: white; box-shadow: 0 2px 8px #16a34a40; transform: scale(1.04); }
+
+/* Hover idle */
+.crit-btn--0-idle:hover:not(.ast-cc-btn--locked)    { background: #fee2e2; transform: scale(1.02); }
+.crit-btn--low-idle:hover:not(.ast-cc-btn--locked)  { background: #ffedd5; transform: scale(1.02); }
+.crit-btn--mid-idle:hover:not(.ast-cc-btn--locked)  { background: #fef9c3; transform: scale(1.02); }
+.crit-btn--high-idle:hover:not(.ast-cc-btn--locked) { background: #dbeafe; transform: scale(1.02); }
+.crit-btn--max-idle:hover:not(.ast-cc-btn--locked)  { background: #dcfce7; transform: scale(1.02); }
+
+/* ── Separador criterios / asistencia ── */
+.ast-section-divider {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.75rem 1rem 0.25rem;
+  font-size: 0.75rem; font-weight: 700; color: #94a3b8;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.ast-section-divider::before,
+.ast-section-divider::after {
+  content: ''; flex: 1; height: 1px; background: #e2e8f0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EVAL — TABS Y LISTAS (estructura EvaluarView)
+═══════════════════════════════════════════════════════════ */
+.ast-eval-tabs {
+  display: flex; gap: 0;
+  margin: 0 1rem 0.75rem;
+  border-radius: 12px; background: #f1f5f9; padding: 3px;
+}
+.ast-eval-tab {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+  padding: 0.55rem 0.5rem; border-radius: 9px; border: none; background: none;
+  font-size: 0.85rem; font-weight: 600; color: #64748b;
+  cursor: pointer; transition: all 0.15s; min-height: 40px;
+}
+.ast-eval-tab--active { background: white; color: #16a34a; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+.ast-eval-tab .pi { font-size: 0.82rem; }
+
+.ast-eval-list {
+  display: flex; flex-direction: column; gap: 0.5rem; padding: 0 1rem;
+}
+
+/* Tarjeta de equipo */
+.ast-eval-eq-card {
+  display: flex; align-items: center; gap: 0;
+  border-radius: 14px; border: 1.5px solid #e2e8f0; background: white;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06); overflow: hidden;
+  cursor: pointer; transition: all 0.15s; min-height: 64px;
+  text-align: left; width: 100%;
+}
+.ast-eval-eq-card:hover { border-color: #bbf7d0; background: #fafffe; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.ast-eval-eq-card:active { transform: scale(0.99); }
+.ast-eval-eq-strip { width: 5px; align-self: stretch; flex-shrink: 0; }
+.ast-eval-eq-body { flex: 1; min-width: 0; padding: 0.6rem 0.75rem; display: flex; flex-direction: column; gap: 0.45rem; }
+.ast-eval-eq-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.ast-eval-eq-name { font-size: 0.93rem; font-weight: 600; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ast-eval-eq-badge {
+  font-size: 0.75rem; font-weight: 700; padding: 0.15rem 0.55rem;
+  border-radius: 999px; background: #f1f5f9; color: #64748b; white-space: nowrap; flex-shrink: 0;
+}
+.ast-eval-eq-badge--done { background: #dcfce7; color: #16a34a; }
+.ast-eval-bar { height: 4px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.ast-eval-bar__fill { height: 100%; border-radius: 4px; transition: width 0.35s ease; min-width: 2px; }
+.ast-eval-chevron { color: #cbd5e1; font-size: 0.75rem; flex-shrink: 0; margin-right: 0.75rem; }
+
+/* Fila de criterio */
+.ast-eval-crit-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.75rem 0.875rem; border-radius: 12px;
+  border: 1.5px solid #e2e8f0; background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  cursor: pointer; text-align: left; min-height: 56px; width: 100%;
+  transition: all 0.15s;
+}
+.ast-eval-crit-row:hover { border-color: #bbf7d0; background: #fafffe; }
+.ast-eval-cr-left { display: flex; align-items: baseline; gap: 0.4rem; flex: 1; min-width: 0; }
+.ast-eval-cr-name { font-size: 0.9rem; font-weight: 500; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ast-eval-cr-max { font-size: 0.75rem; color: #94a3b8; white-space: nowrap; flex-shrink: 0; }
+.ast-eval-cr-chip {
+  font-size: 0.78rem; font-weight: 700; padding: 0.18rem 0.55rem;
+  border-radius: 999px; background: #f1f5f9; color: #64748b; white-space: nowrap; flex-shrink: 0;
+}
+.ast-eval-cr-chip--done { background: #dcfce7; color: #16a34a; }
+
+/* Header detalle (equipo o criterio seleccionado) */
+.ast-eval-dh {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.5rem 1rem 0.75rem;
+}
+.ast-eval-dh__info { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.ast-eval-dh__name { font-size: 1rem; font-weight: 700; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ast-eval-dh__sub { font-size: 0.75rem; color: #94a3b8; }
+.ast-eval-dot {
+  width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid white; box-shadow: 0 0 0 1.5px rgba(0,0,0,.12);
+}
+.ast-eval-dot--sm { width: 11px; height: 11px; }
 
 /* ═══════════════════════════════════════════════════════════
    TABLET (≥ 640px)

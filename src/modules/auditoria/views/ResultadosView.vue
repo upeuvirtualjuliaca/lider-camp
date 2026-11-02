@@ -6,8 +6,10 @@ import {
   type PendientePublicacion,
 } from '@/modules/auditoria/services/auditoria.service'
 import { useCampamentoStore } from '@/stores/campamento'
+import { useDiasCampamento } from '@/composables/useDiasCampamento'
 
 const campStore = useCampamentoStore()
+const { dias: diasConfig, cargar: cargarDias, labelDia } = useDiasCampamento()
 
 const dias          = ref<PendientePublicacion[]>([])
 const cerrado       = ref(false)
@@ -25,10 +27,23 @@ const errCierre     = ref('')
 const confirmCierre = ref(false)
 const mostrarAyuda  = ref(false)
 
-const LABEL_DIA: Record<string, string> = { J: 'Jueves', V: 'Viernes', S: 'Sábado', D: 'Domingo' }
-const ICONO_DIA: Record<string, string> = { J: 'pi-sun', V: 'pi-star', S: 'pi-moon', D: 'pi-heart' }
-
 const diasPublicados = computed(() => dias.value.filter((d) => d.publicado).length)
+
+function fechaDia(momento: string): string {
+  const dc = diasConfig.value.find((d) => d.codigo === momento)
+  if (!dc) return ''
+  const d = new Date(dc.fecha + 'T12:00:00')
+  return d.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })
+}
+
+function iconoDia(momento: string): string {
+  const dc = diasConfig.value.find((d) => d.codigo === momento)
+  if (!dc) return 'pi-calendar'
+  const dow = new Date(dc.fecha + 'T12:00:00').getDay()
+  // 4=jue, 5=vie, 6=sáb, 0=dom
+  const map: Record<number, string> = { 4: 'pi-sun', 5: 'pi-star', 6: 'pi-moon', 0: 'pi-heart' }
+  return map[dow] ?? 'pi-calendar'
+}
 
 onMounted(cargar)
 watch(() => campStore.selectedId, cargar)
@@ -41,6 +56,7 @@ async function cargar() {
     const [diaData, camp] = await Promise.all([
       publicacionService.getPendientes(campStore.selectedId),
       campamentoAdminService.getEstado(campStore.selectedId),
+      cargarDias(),
     ])
     dias.value         = diaData
     cerrado.value      = camp.cerrado
@@ -205,16 +221,17 @@ function completitudColor(val: number, total: number) {
               <div class="flex items-center justify-between px-4 py-3">
                 <div class="flex items-center gap-2.5">
                   <div
-                    class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-black"
-                    :class="dia.publicado
-                      ? 'bg-green-500 text-white'
-                      : 'bg-slate-100 text-slate-500'"
+                    class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+                    :class="dia.publicado ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-500'"
                   >
-                    {{ dia.momento }}
+                    <i :class="['pi text-sm', iconoDia(dia.momento ?? '')]" />
                   </div>
                   <div>
-                    <p class="text-sm font-bold text-slate-700">
-                      {{ LABEL_DIA[dia.momento ?? ''] ?? dia.momento }}
+                    <p class="text-sm font-bold text-slate-700 capitalize">
+                      {{ labelDia(dia.momento ?? '') }}
+                    </p>
+                    <p class="text-[11px] text-slate-400 capitalize leading-tight">
+                      {{ fechaDia(dia.momento ?? '') }}
                     </p>
                     <span
                       class="text-[11px] font-semibold"
@@ -458,7 +475,7 @@ function completitudColor(val: number, total: number) {
                 <h3 class="text-sm font-bold text-slate-700">Publicación de resultados</h3>
               </div>
               <p class="text-sm text-slate-500 leading-relaxed ml-9">
-                Cada día del campamento (J/V/S/D) tiene un interruptor de publicación.
+                Cada día configurado del campamento tiene un interruptor de publicación.
                 Mientras un día esté <strong class="text-slate-700">oculto</strong>, los estudiantes
                 no ven esos puntajes en el ranking público. Al <strong class="text-green-700">publicar</strong>,
                 los resultados de ese día aparecen inmediatamente en la pantalla pública.

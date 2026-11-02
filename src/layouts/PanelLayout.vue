@@ -30,7 +30,7 @@ const sections: NavSection[] = [
     id: 'evaluacion', label: 'Evaluación',
     items: [
       { label: 'Evaluar',     icon: 'pi pi-star',                 to: '/panel/evaluar',               roles: ['admin', 'evaluador'] },
-      { label: 'Asistencia',  icon: 'pi pi-users',                to: '/panel/asistencia',            roles: ['admin', 'evaluador'] },
+      { label: 'P. Estelar',  icon: 'pi pi-users',                to: '/panel/asistencia',            roles: ['admin', 'evaluador'] },
       { label: 'Incidencias', icon: 'pi pi-exclamation-triangle', to: '/panel/incidencias',           roles: ['admin', 'evaluador'] },
       { label: 'Liderazgo',   icon: 'pi pi-bolt',                 to: '/panel/liderazgo/indicadores', roles: ['admin'] },
     ],
@@ -38,8 +38,8 @@ const sections: NavSection[] = [
   {
     id: 'seguimiento', label: 'Seguimiento',
     items: [
-      { label: 'Ranking', icon: 'pi pi-trophy',     to: '/panel/ranking', roles: ['admin', 'evaluador'] },
       { label: 'Avance',  icon: 'pi pi-chart-line', to: '/panel/avance',  roles: ['admin'] },
+      { label: 'Ranking', icon: 'pi pi-trophy',     to: '/panel/ranking', roles: ['admin', 'evaluador'] },
     ],
   },
   {
@@ -56,11 +56,11 @@ const sections: NavSection[] = [
     id: 'admin', label: 'Administración',
     items: [
       { label: 'Campamento',  icon: 'pi pi-building',  to: '/panel/campamento', roles: ['admin'] },
-      { label: 'Usuarios',    icon: 'pi pi-id-card',   to: '/panel/usuarios',   roles: ['admin'] },
       { label: 'Revisiones',  icon: 'pi pi-file-edit', to: '/panel/revisiones', roles: ['admin', 'evaluador'] },
       { label: 'Publicación', icon: 'pi pi-flag-fill', to: '/panel/resultados', roles: ['admin'] },
       { label: 'Auditoría',   icon: 'pi pi-history',   to: '/panel/auditoria',  roles: ['admin'] },
       { label: 'Reportes',    icon: 'pi pi-download',  to: '/panel/reportes',   roles: ['admin', 'evaluador'] },
+      { label: 'Usuarios',    icon: 'pi pi-id-card',   to: '/panel/usuarios',   roles: ['admin'] },
     ],
   },
 ]

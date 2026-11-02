@@ -18,7 +18,10 @@
       "Bash(grep -r revisiones D:/Projects/lider-camp/src/router --include=*.ts -l)",
       "Bash(grep -r revisiones D:/Projects/lider-camp/src/router --include=*.ts -n)",
       "Bash(grep -v \"^$\")",
-      "Bash(find D:Projectslider-campsrc -type f \\\\\\(-name *layout* -o -name *sidebar* -o -name *nav* -o -name *drawer* -o -name *panel* -o -name *router* -o -name *route* \\\\\\))"
+      "Bash(find D:Projectslider-campsrc -type f \\\\\\(-name *layout* -o -name *sidebar* -o -name *nav* -o -name *drawer* -o -name *panel* -o -name *router* -o -name *route* \\\\\\))",
+      "Bash(gh run:*)",
+      "Bash(node -e \":*)",
+      "Bash(cd:*)"
     ]
   }
 }

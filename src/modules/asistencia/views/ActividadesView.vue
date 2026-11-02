@@ -3,7 +3,9 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useDiasCampamento } from '@/composables/useDiasCampamento'
 import {
   actividadesService,
+  criteriosEvalService,
   type ActividadConProgramacion,
+  type CriterioEval,
 } from '@/modules/asistencia/services/asistencia.service'
 import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database'
@@ -52,6 +54,83 @@ const motivoCancelacion = ref('')
 
 const dialogAyuda = ref(false)
 
+// ── Dialog criterios de evaluación ───────────────────────────────────────────
+interface CriterioForm { nombre: string; puntaje: number | null }
+
+const dialogCriterios      = ref(false)
+const actividadCriterios   = ref<ActividadConProgramacion | null>(null)
+const criteriosForm        = ref<CriterioForm[]>([])
+const guardandoCriterios   = ref(false)
+const errorCriterios       = ref('')
+const criteriosGuardados   = ref<Set<string>>(new Set()) // IDs de actividades con criterios
+
+const puntajeMaxActividad = computed(() =>
+  (actividadCriterios.value?.programacion as ProgramacionConCriterio)?.puntaje_max ?? 100
+)
+
+const sumaActual = computed(() =>
+  criteriosForm.value.reduce((s, c) => s + (c.puntaje ?? 0), 0)
+)
+
+const sumaValida = computed(() => sumaActual.value === puntajeMaxActividad.value)
+
+async function abrirCriterios(act: ActividadConProgramacion) {
+  actividadCriterios.value = act
+  errorCriterios.value     = ''
+  guardandoCriterios.value = false
+  dialogCriterios.value    = true
+
+  // Cargar criterios existentes
+  try {
+    const existentes: CriterioEval[] = await criteriosEvalService.getPorActividad(act.id)
+    criteriosForm.value = existentes.length
+      ? existentes.map((c) => ({ nombre: c.nombre, puntaje: Number(c.puntaje_max) }))
+      : [{ nombre: '', puntaje: null }]
+  } catch {
+    criteriosForm.value = [{ nombre: '', puntaje: null }]
+  }
+}
+
+function agregarFilaCriterio() {
+  criteriosForm.value.push({ nombre: '', puntaje: null })
+}
+
+function eliminarFilaCriterio(idx: number) {
+  criteriosForm.value.splice(idx, 1)
+}
+
+function distribuirEquitativamente() {
+  const n = criteriosForm.value.length
+  if (!n) return
+  const base  = Math.floor(puntajeMaxActividad.value / n)
+  const resto = puntajeMaxActividad.value - base * n
+  criteriosForm.value.forEach((c, i) => {
+    c.puntaje = base + (i === 0 ? resto : 0)
+  })
+}
+
+async function guardarCriterios() {
+  if (!actividadCriterios.value) return
+  guardandoCriterios.value = true
+  errorCriterios.value     = ''
+  try {
+    await criteriosEvalService.guardar(
+      actividadCriterios.value.id,
+      criteriosForm.value.map((c, i) => ({
+        nombre:      c.nombre.trim(),
+        puntaje_max: c.puntaje ?? 0,
+        orden:       i,
+      })),
+    )
+    criteriosGuardados.value.add(actividadCriterios.value.id)
+    dialogCriterios.value = false
+  } catch (e: unknown) {
+    errorCriterios.value = e instanceof Error ? e.message : 'Error al guardar'
+  } finally {
+    guardandoCriterios.value = false
+  }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fechaCompleta(momento: string): string {
@@ -85,7 +164,7 @@ async function cargar() {
   try {
     await cargarCampamento()
     momentoActivo.value = detectarMomentoActual()
-    await Promise.all([cargarActividades(), cargarCriteriosAsistencia()])
+    await Promise.all([cargarActividades(), cargarCriteriosAsistencia(), cargarCriteriosGuardados()])
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Error al cargar datos'
   } finally {
@@ -105,6 +184,16 @@ async function cargarActividades() {
     .order('hora_inicio', { ascending: true, nullsFirst: true })
   if (err) throw err
   actividades.value = ((data ?? []).filter((a) => a.programacion !== null)) as ActividadConProgramacion[]
+}
+
+async function cargarCriteriosGuardados() {
+  const campId = campStore.selectedId!
+  const { data, error: err } = await supabase
+    .from('actividad_criterios_eval')
+    .select('actividad_id, actividades!inner(programacion!inner(campamento_id))')
+    .eq('actividades.programacion.campamento_id', campId)
+  if (err) return
+  criteriosGuardados.value = new Set((data ?? []).map((r) => r.actividad_id))
 }
 
 async function cargarCriteriosAsistencia() {
@@ -346,18 +435,38 @@ async function confirmarCancelar() {
 
           <!-- Right: estado badge + action buttons -->
           <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
-            <span
-              class="text-xs font-bold rounded-full px-2 py-0.5 capitalize"
-              :class="{
-                'bg-green-100 text-green-700': act.estado === 'programada',
-                'bg-emerald-100 text-emerald-700': act.estado === 'realizada',
-                'bg-red-100 text-red-600': act.estado === 'cancelada',
-              }"
-            >
-              {{ act.estado }}
-            </span>
+            <div class="flex items-center gap-1.5">
+              <!-- Badge criterios configurados -->
+              <span
+                v-if="criteriosGuardados.has(act.id)"
+                class="text-xs font-bold rounded-full px-2 py-0.5 bg-purple-100 text-purple-700"
+                title="Criterios de evaluación configurados"
+              >
+                <i class="pi pi-sliders-h text-[10px]" /> Criterios ✓
+              </span>
+              <span
+                class="text-xs font-bold rounded-full px-2 py-0.5 capitalize"
+                :class="{
+                  'bg-green-100 text-green-700': act.estado === 'programada',
+                  'bg-emerald-100 text-emerald-700': act.estado === 'realizada',
+                  'bg-red-100 text-red-600': act.estado === 'cancelada',
+                }"
+              >
+                {{ act.estado }}
+              </span>
+            </div>
 
-            <div v-if="session.esAdmin" class="flex gap-1">
+            <div v-if="session.esAdmin" class="flex gap-1 flex-wrap justify-end">
+              <!-- Criterios de evaluación -->
+              <button
+                class="h-9 px-2.5 rounded-lg border border-purple-200 flex items-center gap-1 text-purple-600 hover:border-purple-400 hover:bg-purple-50 transition text-xs font-semibold"
+                aria-label="Criterios de evaluación"
+                title="Criterios de evaluación"
+                @click="abrirCriterios(act)"
+              >
+                <i class="pi pi-sliders-h text-xs" />
+                <span class="hidden sm:inline">Criterios</span>
+              </button>
               <!-- Editar -->
               <button
                 class="w-9 h-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-300 hover:bg-gray-50 transition"
@@ -581,6 +690,150 @@ async function confirmarCancelar() {
               <i v-else class="pi pi-times text-xs" />
               Confirmar cancelación
             </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ── Modal criterios de evaluación ───────────────────────────────────── -->
+    <Teleport to="body">
+      <div
+        v-if="dialogCriterios"
+        class="fixed inset-0 z-50 flex flex-col sm:items-center sm:justify-center bg-black/40"
+        @click.self="dialogCriterios = false"
+      >
+        <div class="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg mt-auto sm:mt-0 max-h-[94dvh] flex flex-col">
+          <div class="flex justify-center pt-3 sm:hidden"><div class="w-10 h-1 bg-gray-200 rounded-full" /></div>
+
+          <!-- Header -->
+          <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
+            <div>
+              <h2 class="text-base font-bold text-gray-800 m-0">Criterios de evaluación</h2>
+              <p class="text-xs text-gray-400 m-0 mt-0.5 truncate max-w-xs">{{ actividadCriterios?.nombre }}</p>
+            </div>
+            <button class="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 transition" @click="dialogCriterios = false">
+              <i class="pi pi-times text-sm" />
+            </button>
+          </div>
+
+          <!-- Barra de puntaje total -->
+          <div class="px-5 pt-4 flex-shrink-0">
+            <div class="bg-slate-50 border rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+              <div class="flex flex-col gap-0.5">
+                <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Puntaje total de la actividad</span>
+                <span class="text-sm text-slate-700">Distribuye <strong class="text-slate-900">{{ puntajeMaxActividad }} pts</strong> entre los criterios</span>
+              </div>
+              <!-- Indicador suma -->
+              <div
+                class="flex flex-col items-center px-3 py-1.5 rounded-lg text-xs font-bold min-w-[64px] text-center transition-colors"
+                :class="sumaValida
+                  ? 'bg-green-100 text-green-700'
+                  : sumaActual > puntajeMaxActividad
+                    ? 'bg-red-100 text-red-600'
+                    : 'bg-amber-100 text-amber-700'"
+              >
+                <span class="text-lg font-black leading-tight">{{ sumaActual }}</span>
+                <span>/ {{ puntajeMaxActividad }}</span>
+              </div>
+            </div>
+
+            <!-- Barra de progreso visual -->
+            <div class="mt-2 h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                class="h-full rounded-full transition-all duration-300"
+                :class="sumaActual > puntajeMaxActividad ? 'bg-red-500' : sumaValida ? 'bg-green-500' : 'bg-amber-400'"
+                :style="{ width: Math.min(100, (sumaActual / puntajeMaxActividad) * 100) + '%' }"
+              />
+            </div>
+          </div>
+
+          <!-- Lista de criterios -->
+          <div class="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-2">
+            <div
+              v-for="(c, idx) in criteriosForm"
+              :key="idx"
+              class="flex items-center gap-2"
+            >
+              <!-- Número -->
+              <span class="w-6 h-6 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                {{ idx + 1 }}
+              </span>
+
+              <!-- Nombre -->
+              <input
+                v-model="c.nombre"
+                type="text"
+                placeholder="Nombre del criterio…"
+                class="flex-1 min-w-0 border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 bg-gray-50 focus:bg-white transition min-h-[44px]"
+              />
+
+              <!-- Puntaje -->
+              <input
+                v-model.number="c.puntaje"
+                type="number"
+                min="0"
+                :max="puntajeMaxActividad"
+                placeholder="Pts"
+                class="w-20 border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-center font-bold focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 bg-gray-50 focus:bg-white transition min-h-[44px]"
+              />
+
+              <!-- Eliminar fila -->
+              <button
+                class="w-9 h-9 flex-shrink-0 flex items-center justify-center rounded-lg border border-red-100 text-red-400 hover:bg-red-50 hover:border-red-300 transition"
+                :disabled="criteriosForm.length === 1"
+                @click="eliminarFilaCriterio(idx)"
+              >
+                <i class="pi pi-trash text-xs" />
+              </button>
+            </div>
+
+            <!-- Agregar fila -->
+            <button
+              class="mt-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-purple-300 text-purple-600 hover:bg-purple-50 text-sm font-semibold transition w-full justify-center min-h-[44px]"
+              @click="agregarFilaCriterio"
+            >
+              <i class="pi pi-plus text-xs" /> Agregar criterio
+            </button>
+          </div>
+
+          <!-- Error -->
+          <div v-if="errorCriterios" class="mx-5 mb-2 flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-3 py-2.5 text-xs flex-shrink-0">
+            <i class="pi pi-exclamation-circle flex-shrink-0" /> {{ errorCriterios }}
+          </div>
+
+          <!-- Footer -->
+          <div class="flex items-center justify-between gap-2 px-5 py-4 border-t border-gray-100 flex-shrink-0">
+            <!-- Distribuir equitativamente -->
+            <button
+              class="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition min-h-[44px]"
+              @click="distribuirEquitativamente"
+            >
+              <i class="pi pi-arrows-h text-xs" /> Distribuir
+            </button>
+
+            <div class="flex gap-2">
+              <button
+                class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 min-h-[44px] transition"
+                @click="dialogCriterios = false"
+              >
+                Cancelar
+              </button>
+              <button
+                class="flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-semibold text-sm min-h-[44px] transition"
+                :class="sumaValida && criteriosForm.every(c => c.nombre.trim()) && !guardandoCriterios
+                  ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'"
+                :disabled="!sumaValida || criteriosForm.some(c => !c.nombre.trim()) || guardandoCriterios"
+                @click="guardarCriterios"
+              >
+                <svg v-if="guardandoCriterios" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <i v-else class="pi pi-check text-xs" />
+                {{ guardandoCriterios ? 'Guardando…' : 'Guardar criterios' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>

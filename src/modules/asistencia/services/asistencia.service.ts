@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
 
+export type EvalRegistro = Tables<'actividad_eval_registros'>
+
 // ── Tipos exportados ─────────────────────────────────────────────────────────
 export type Actividad = Tables<'actividades'>
 export type AsistenciaRegistro = Tables<'asistencia_registros'>
@@ -36,6 +38,21 @@ export type RegistroConIntegrante = AsistenciaRegistro & {
 
 // ── actividadesService ────────────────────────────────────────────────────────
 export const actividadesService = {
+  async getConteosPorCampamento(campamentoId: string): Promise<Record<string, number>> {
+    const { data, error } = await supabase
+      .from('actividades')
+      .select('programacion!inner(momento, campamento_id)')
+      .eq('programacion.campamento_id', campamentoId)
+      .neq('estado', 'cancelada')
+    if (error) throw error
+    const conteo: Record<string, number> = {}
+    for (const a of data ?? []) {
+      const m = (a.programacion as any)?.momento as string | undefined
+      if (m) conteo[m] = (conteo[m] ?? 0) + 1
+    }
+    return conteo
+  },
+
   async getPorDia(momento: string): Promise<ActividadConProgramacion[]> {
     const { data, error } = await supabase
       .from('actividades')
@@ -93,6 +110,37 @@ export const actividadesService = {
   },
 }
 
+// ── criteriosEvalService ─────────────────────────────────────────────────────
+export type CriterioEval = Tables<'actividad_criterios_eval'>
+
+export const criteriosEvalService = {
+  async getPorActividad(actividadId: string): Promise<CriterioEval[]> {
+    const { data, error } = await supabase
+      .from('actividad_criterios_eval')
+      .select('*')
+      .eq('actividad_id', actividadId)
+      .order('orden')
+    if (error) throw error
+    return data ?? []
+  },
+
+  async guardar(actividadId: string, criterios: { nombre: string; puntaje_max: number; orden: number }[]): Promise<void> {
+    // Reemplaza todos los criterios de la actividad en una transacción implícita
+    const { error: delErr } = await supabase
+      .from('actividad_criterios_eval')
+      .delete()
+      .eq('actividad_id', actividadId)
+    if (delErr) throw delErr
+
+    if (criterios.length === 0) return
+
+    const { error: insErr } = await supabase
+      .from('actividad_criterios_eval')
+      .insert(criterios.map((c) => ({ ...c, actividad_id: actividadId })))
+    if (insErr) throw insErr
+  },
+}
+
 // ── asistenciaService ────────────────────────────────────────────────────────
 export const asistenciaService = {
   async getRegistrosPorActividad(actividad_id: string): Promise<RegistroConIntegrante[]> {
@@ -140,6 +188,28 @@ export const asistenciaService = {
       .eq('momento', momento)
     if (error) throw error
     return data ?? []
+  },
+}
+
+// ── evalRegistrosService ─────────────────────────────────────────────────────
+export const evalRegistrosService = {
+  async getPorActividad(actividadId: string): Promise<EvalRegistro[]> {
+    const { data, error } = await supabase
+      .from('actividad_eval_registros')
+      .select('*')
+      .eq('actividad_id', actividadId)
+    if (error) throw error
+    return data ?? []
+  },
+
+  async upsert(datos: TablesInsert<'actividad_eval_registros'>): Promise<EvalRegistro> {
+    const { data, error } = await supabase
+      .from('actividad_eval_registros')
+      .upsert(datos, { onConflict: 'criterio_eval_id,equipo_id' })
+      .select()
+      .single()
+    if (error) throw error
+    return data
   },
 }
 
