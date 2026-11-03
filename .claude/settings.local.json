@@ -21,7 +21,10 @@
       "Bash(find D:Projectslider-campsrc -type f \\\\\\(-name *layout* -o -name *sidebar* -o -name *nav* -o -name *drawer* -o -name *panel* -o -name *router* -o -name *route* \\\\\\))",
       "Bash(gh run:*)",
       "Bash(node -e \":*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(grep:*)",
+      "Bash(find /d/Projects/lider-camp/src/modules/observaciones -type f -name *.ts -o -name *.vue -o -name *.js)",
+      "Bash(find /d/Projects/lider-camp/src/modules/criterios -type f -name *.ts -o -name *.vue -o -name *.js)"
     ]
   }
 }

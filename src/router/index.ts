@@ -148,12 +148,6 @@ const router = createRouter({
           meta: { requiresAuth: true, roles: ['admin', 'evaluador'] },
         },
         {
-          path: 'incidencias/bandeja',
-          name: 'incidencias-bandeja',
-          component: () => import('@/modules/incidencias/views/BandejaView.vue'),
-          meta: { requiresAuth: true, roles: ['admin'] },
-        },
-        {
           path: 'incidencias/:id',
           name: 'incidencia-detalle',
           component: () => import('@/modules/incidencias/views/IncidenciaDetalleView.vue'),
@@ -180,8 +174,8 @@ const router = createRouter({
         {
           path: 'revisiones',
           name: 'revisiones',
-          component: () => import('@/modules/auditoria/views/RevisionesView.vue'),
-          meta: { requiresAuth: true, roles: ['admin', 'evaluador'] },
+          component: () => import('@/modules/incidencias/views/BandejaView.vue'),
+          meta: { requiresAuth: true, roles: ['admin'] },
         },
         {
           path: 'resultados',

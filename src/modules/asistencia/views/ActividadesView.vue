@@ -32,8 +32,9 @@ const errorGuardado = ref('')
 const momentoActivo = ref<string>('')
 
 const actividades = ref<ActividadConProgramacion[]>([])
-// Criterios de tipo asistencia activos en el campamento (de campamento_criterios, no programacion)
 const criteriosAsistencia = ref<Tables<'criterios'>[]>([])
+const tiposCalculo = ref<{ clave: string; nombre: string }[]>([])
+const programacionDia = ref<{ criterio_id: string; puntaje_max: number; tipo_calculo: string }[]>([])
 
 // ── Dialogs ───────────────────────────────────────────────────────────────────
 const dialogForm = ref(false)
@@ -64,9 +65,12 @@ const guardandoCriterios   = ref(false)
 const errorCriterios       = ref('')
 const criteriosGuardados   = ref<Set<string>>(new Set()) // IDs de actividades con criterios
 
-const puntajeMaxActividad = computed(() =>
-  (actividadCriterios.value?.programacion as ProgramacionConCriterio)?.puntaje_max ?? 100
-)
+const puntajeMaxActividad = computed(() => {
+  if (!actividadCriterios.value) return 100
+  const distribuido = ptsDistribuidos(actividadCriterios.value)
+  if (distribuido > 0) return distribuido
+  return (actividadCriterios.value.programacion as ProgramacionConCriterio)?.puntaje_max ?? 100
+})
 
 const sumaActual = computed(() =>
   criteriosForm.value.reduce((s, c) => s + (c.puntaje ?? 0), 0)
@@ -146,9 +150,44 @@ const actividadesDelDia = computed(() =>
   ),
 )
 
-// Opciones de criterio asistencia para el modal (no dependen del día: la fila de programacion se crea sola)
+function nombreTipoCalculo(tipoCalculo: string | null | undefined): string {
+  if (!tipoCalculo) return ''
+  return tiposCalculo.value.find((t) => t.clave === tipoCalculo)?.nombre ?? tipoCalculo
+}
+
+// Distribución de puntaje — solo para Programa Estelar
+const infoPuntajeDia = computed(() =>
+  programacionDia.value
+    .filter((prog) => prog.tipo_calculo === 'programa_estelar')
+    .map((prog) => {
+      const actsActivas = actividadesDelDia.value.filter(
+        (a) => a.estado !== 'cancelada' && (a.programacion as any)?.criterio_id === prog.criterio_id,
+      )
+      const count = actsActivas.length
+      const ptsPorAct = count > 0 ? Math.round(prog.puntaje_max / count) : prog.puntaje_max
+      return {
+        criterio_id: prog.criterio_id,
+        nombre_tipo: nombreTipoCalculo(prog.tipo_calculo),
+        puntaje_max: prog.puntaje_max,
+        count,
+        ptsPorAct,
+      }
+    })
+)
+
+function ptsDistribuidos(act: ActividadConProgramacion): number {
+  const criterioId = (act.programacion as any)?.criterio_id
+  return infoPuntajeDia.value.find((i) => i.criterio_id === criterioId)?.ptsPorAct ?? 0
+}
+
+// Opciones para el select Criterio: todos los tipos de cálculo del campamento
 const opcionesCriterio = computed(() =>
-  criteriosAsistencia.value.map((c) => ({ label: c.nombre, value: c.id }))
+  tiposCalculo.value
+    .map((t) => {
+      const criterio = criteriosAsistencia.value.find((c) => c.tipo_calculo === t.clave)
+      return criterio ? { label: t.nombre, value: criterio.id } : null
+    })
+    .filter((o): o is { label: string; value: string } => o !== null)
 )
 
 // ── Carga ─────────────────────────────────────────────────────────────────────
@@ -164,7 +203,8 @@ async function cargar() {
   try {
     await cargarCampamento()
     momentoActivo.value = detectarMomentoActual()
-    await Promise.all([cargarActividades(), cargarCriteriosAsistencia(), cargarCriteriosGuardados()])
+    await Promise.all([cargarActividades(), cargarCriteriosAsistencia(), cargarCriteriosGuardados(), cargarTiposCalculo()])
+    await cargarProgramacionDia(momentoActivo.value)
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Error al cargar datos'
   } finally {
@@ -198,7 +238,6 @@ async function cargarCriteriosGuardados() {
 
 async function cargarCriteriosAsistencia() {
   const campId = campStore.selectedId!
-  // Cargamos desde campamento_criterios para no depender de que existan filas en programacion
   const { data, error: err } = await supabase
     .from('campamento_criterios')
     .select('criterio_id, criterios(*)')
@@ -206,11 +245,37 @@ async function cargarCriteriosAsistencia() {
   if (err) throw err
   criteriosAsistencia.value = (data as CampamentoCriterioConCriterio[] ?? [])
     .map((r) => r.criterios)
-    .filter((c): c is Tables<'criterios'> => c !== null && c.tipo_calculo === 'asistencia')
+    .filter((c): c is Tables<'criterios'> => c !== null)
+}
+
+async function cargarTiposCalculo() {
+  const { data, error: err } = await supabase
+    .from('tipos_calculo')
+    .select('clave, nombre')
+    .order('orden')
+  if (err) return
+  tiposCalculo.value = data ?? []
+}
+
+async function cargarProgramacionDia(momento: string) {
+  const campId = campStore.selectedId!
+  const { data, error: err } = await supabase
+    .from('programacion')
+    .select('criterio_id, puntaje_max, criterios(tipo_calculo)')
+    .eq('campamento_id', campId)
+    .eq('momento', momento)
+    .eq('estado', 'programado')
+  if (err) return
+  programacionDia.value = (data ?? []).map((r: any) => ({
+    criterio_id: r.criterio_id,
+    puntaje_max: r.puntaje_max,
+    tipo_calculo: r.criterios?.tipo_calculo ?? '',
+  }))
 }
 
 async function seleccionarMomento(m: string) {
   momentoActivo.value = m
+  await cargarProgramacionDia(m)
 }
 
 // ── CRUD Actividades ──────────────────────────────────────────────────────────
@@ -256,36 +321,54 @@ async function guardarActividad() {
   try {
     const campId = campStore.selectedId!
 
-    // Obtener o crear la fila de programacion para este criterio × día
-    // (upsert por la UC: criterio_id + momento + campamento_id)
-    const { data: prog, error: progErr } = await supabase
+    // Buscar la programacion existente para este criterio × día (sin sobrescribir puntaje_max)
+    let { data: prog, error: progErr } = await supabase
       .from('programacion')
-      .upsert(
-        {
+      .select('id')
+      .eq('campamento_id', campId)
+      .eq('criterio_id', form.value.criterio_id)
+      .eq('momento', momentoActivo.value)
+      .single()
+
+    // Si no existe, crearla con puntaje_max por defecto
+    if (!prog) {
+      const { data: nuevaProg, error: insertErr } = await supabase
+        .from('programacion')
+        .insert({
           campamento_id: campId,
           criterio_id: form.value.criterio_id,
           momento: momentoActivo.value,
           puntaje_max: 100,
           estado: 'programado',
-        },
-        { onConflict: 'criterio_id,momento,campamento_id' },
-      )
-      .select('id')
-      .single()
-    if (progErr) throw progErr
-
-    const payload = {
-      programacion_id: prog.id,
-      nombre: form.value.nombre.trim(),
-      hora_inicio: form.value.hora_inicio || null,
-      lugar: form.value.lugar.trim() || null,
-      evaluador_id: session.user!.id,
+        })
+        .select('id')
+        .single()
+      if (insertErr) throw new Error(insertErr.message)
+      prog = nuevaProg
+    } else if (progErr && progErr.code !== 'PGRST116') {
+      throw new Error(progErr.message)
     }
 
     if (esEdicion.value && actividadEditando.value) {
-      await actividadesService.actualizar(actividadEditando.value.id, payload)
+      const { error: updErr } = await supabase
+        .from('actividades')
+        .update({
+          programacion_id: prog.id,
+          nombre: form.value.nombre.trim(),
+          hora_inicio: form.value.hora_inicio || null,
+          lugar: form.value.lugar.trim() || null,
+        })
+        .eq('id', actividadEditando.value.id)
+      if (updErr) throw new Error(updErr.message)
     } else {
-      await actividadesService.crear({ ...payload, estado: 'programada' })
+      await actividadesService.crear({
+        programacion_id: prog.id,
+        nombre: form.value.nombre.trim(),
+        hora_inicio: form.value.hora_inicio || null,
+        lugar: form.value.lugar.trim() || null,
+        evaluador_id: session.user!.id,
+        estado: 'programada',
+      })
     }
     await cargarActividades()
     dialogForm.value = false
@@ -402,6 +485,32 @@ async function confirmarCancelar() {
       <!-- ── Fecha completa del día activo ─────────────────────────────────── -->
       <p class="text-xs text-gray-500 mb-3 capitalize">{{ fechaCompleta(momentoActivo) }}</p>
 
+      <!-- ── Puntajes programados del día ─────────────────────────────────── -->
+      <div v-if="infoPuntajeDia.length" class="flex flex-col gap-2 mb-3">
+        <div
+          v-for="info in infoPuntajeDia"
+          :key="info.criterio_id"
+          class="flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm border"
+          :class="info.count === 0
+            ? 'bg-amber-50 border-amber-200 text-amber-800'
+            : 'bg-blue-50 border-blue-200 text-blue-800'"
+        >
+          <i
+            class="pi flex-shrink-0"
+            :class="info.count === 0 ? 'pi-exclamation-triangle text-amber-500' : 'pi-info-circle text-blue-500'"
+          />
+          <span class="flex-1">
+            <strong>{{ info.nombre_tipo }}</strong>:
+            <template v-if="info.count === 0">
+              {{ info.puntaje_max }} pts programados — Crea al menos una actividad para aplicar este puntaje.
+            </template>
+            <template v-else>
+              {{ info.puntaje_max }} pts ÷ {{ info.count }} actividad{{ info.count > 1 ? 'es' : '' }} = <strong>{{ info.ptsPorAct }} pts c/u</strong>
+            </template>
+          </span>
+        </div>
+      </div>
+
       <!-- ── Lista de actividades ──────────────────────────────────────────── -->
       <div v-if="actividadesDelDia.length" class="flex flex-col gap-2">
         <div
@@ -412,9 +521,17 @@ async function confirmarCancelar() {
         >
           <!-- Left: criterio chip + meta -->
           <div class="flex items-start gap-2 flex-1 min-w-0">
-            <span class="text-xs font-bold bg-green-100 text-green-700 rounded-full px-2 py-0.5 whitespace-nowrap flex-shrink-0 mt-0.5">
-              {{ (act.programacion as any)?.criterios?.codigo ?? '—' }}
-            </span>
+            <div class="flex flex-col gap-1 flex-shrink-0 mt-0.5">
+              <span class="text-xs font-bold bg-green-100 text-green-700 rounded-full px-2 py-0.5 whitespace-nowrap text-center">
+                {{ (act.programacion as any)?.criterios?.codigo ?? '—' }}
+              </span>
+              <span
+                v-if="(act.programacion as any)?.criterios?.tipo_calculo"
+                class="text-xs font-semibold bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 whitespace-nowrap text-center"
+              >
+                {{ nombreTipoCalculo((act.programacion as any)?.criterios?.tipo_calculo) }}
+              </span>
+            </div>
 
             <div class="flex flex-col gap-0.5 min-w-0">
               <span v-if="act.hora_inicio" class="text-xs text-gray-500 font-semibold">
@@ -425,6 +542,10 @@ async function confirmarCancelar() {
                 :class="{ 'line-through': act.estado === 'cancelada' }"
               >
                 {{ act.nombre }}
+              </span>
+              <span v-if="ptsDistribuidos(act) > 0" class="flex items-center gap-1 text-xs text-blue-600 font-semibold">
+                <i class="pi pi-star text-xs text-amber-400" />
+                {{ ptsDistribuidos(act) }} pts
               </span>
               <span v-if="act.lugar" class="flex items-center gap-1 text-xs text-gray-500">
                 <i class="pi pi-map-marker text-xs" />
@@ -530,13 +651,13 @@ async function confirmarCancelar() {
           <!-- Cuerpo -->
           <div class="flex flex-col gap-4 px-5 py-5">
 
-            <!-- Sin criterios de asistencia configurados en el campamento -->
+            <!-- Sin criterios configurados en el campamento -->
             <div
               v-if="!opcionesCriterio.length"
               class="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 text-xs leading-relaxed"
             >
-              <p class="font-semibold m-0 mb-1">Sin criterios de asistencia</p>
-              <p class="m-0">Ve a <strong>Criterios</strong> y edita un criterio para asignarle el tipo <em>Asistencia</em>, luego aplícalo al campamento en <strong>Programación</strong>.</p>
+              <p class="font-semibold m-0 mb-1">Sin criterios disponibles</p>
+              <p class="m-0">Ve a <strong>Programación</strong> y vincula criterios al campamento activo para que aparezcan aquí.</p>
             </div>
 
             <template v-else>
@@ -547,7 +668,7 @@ async function confirmarCancelar() {
                   v-model="form.criterio_id"
                   class="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm font-medium focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 min-h-[48px] bg-gray-50 focus:bg-white transition"
                 >
-                  <option value="" disabled>Selecciona el criterio...</option>
+                  <option value="" disabled>Selecciona el tipo de cálculo...</option>
                   <option v-for="op in opcionesCriterio" :key="op.value" :value="op.value">
                     {{ op.label }}
                   </option>

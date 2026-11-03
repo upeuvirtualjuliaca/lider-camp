@@ -479,7 +479,7 @@ function filaClass(fila: FilaIntegrante) {
 
         <div class="ast-dias-grid">
           <button
-            v-for="m in momentos"
+            v-for="m in momentos.filter(m => (conteosActividades[m] ?? 0) > 0)"
             :key="m"
             class="ast-dia-card"
             :class="{

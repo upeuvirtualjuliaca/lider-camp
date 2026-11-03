@@ -30,7 +30,7 @@ const sections: NavSection[] = [
     id: 'evaluacion', label: 'Evaluación',
     items: [
       { label: 'Evaluar',     icon: 'pi pi-star',                 to: '/panel/evaluar',               roles: ['admin', 'evaluador'] },
-      { label: 'P. Estelar',  icon: 'pi pi-users',                to: '/panel/asistencia',            roles: ['admin', 'evaluador'] },
+      { label: 'Actividades',  icon: 'pi pi-users',                to: '/panel/asistencia',            roles: ['admin', 'evaluador'] },
       { label: 'Incidencias', icon: 'pi pi-exclamation-triangle', to: '/panel/incidencias',           roles: ['admin', 'evaluador'] },
       { label: 'Liderazgo',   icon: 'pi pi-bolt',                 to: '/panel/liderazgo/indicadores', roles: ['admin'] },
     ],
@@ -56,7 +56,7 @@ const sections: NavSection[] = [
     id: 'admin', label: 'Administración',
     items: [
       { label: 'Campamento',  icon: 'pi pi-building',  to: '/panel/campamento', roles: ['admin'] },
-      { label: 'Revisiones',  icon: 'pi pi-file-edit', to: '/panel/revisiones', roles: ['admin', 'evaluador'] },
+      { label: 'Revisiones',  icon: 'pi pi-file-edit', to: '/panel/revisiones', roles: ['admin'] },
       { label: 'Publicación', icon: 'pi pi-flag-fill', to: '/panel/resultados', roles: ['admin'] },
       { label: 'Auditoría',   icon: 'pi pi-history',   to: '/panel/auditoria',  roles: ['admin'] },
       { label: 'Reportes',    icon: 'pi pi-download',  to: '/panel/reportes',   roles: ['admin', 'evaluador'] },

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useSessionStore } from '@/modules/auth/store'
 import {
   incidenciasService,
   evidenciasService,
@@ -10,9 +9,8 @@ import {
 } from '@/modules/incidencias/services/incidencias.service'
 import { integrantesService, type Integrante } from '@/modules/equipos/services/equipos.service'
 
-const route   = useRoute()
-const router  = useRouter()
-const session = useSessionStore()
+const route  = useRoute()
+const router = useRouter()
 
 const id = route.params.id as string
 
@@ -23,17 +21,6 @@ const urlsEvidencia = ref<Record<string, string>>({})
 const cargando      = ref(true)
 const error         = ref('')
 
-// Validación admin
-const motiResolucion  = ref('')
-const guardandoVal    = ref(false)
-const errVal          = ref('')
-const mostrarValidar  = ref(false)
-const accionVal       = ref<'validar' | 'rechazar' | ''>('')
-
-// Descargo del equipo (editable antes de validar)
-const editandoDescargo = ref(false)
-const descargo         = ref('')
-const guardandoDes     = ref(false)
 
 // ── Carga ─────────────────────────────────────────────────────────────────────
 onMounted(async () => {
@@ -41,7 +28,6 @@ onMounted(async () => {
     const inc = await incidenciasService.getPorId(id)
     if (!inc) { error.value = 'Incidencia no encontrada'; return }
     incidencia.value = inc
-    descargo.value = inc.descargo_equipo ?? ''
 
     // Cargar integrantes con nombre si hay ids
     if (inc.integrantes.length) {
@@ -78,59 +64,6 @@ function nombreIntegrante(id: string) {
   return i ? `${i.apellidos}, ${i.nombres}` : id
 }
 
-const puedeValidar = computed(
-  () => session.rol === 'admin' && incidencia.value?.estado === 'registrado',
-)
-
-const puedeEditarDescargo = computed(
-  () => incidencia.value?.estado === 'registrado',
-)
-
-// ── Acciones ──────────────────────────────────────────────────────────────────
-function iniciarValidacion(accion: 'validar' | 'rechazar') {
-  accionVal.value      = accion
-  motiResolucion.value = ''
-  errVal.value         = ''
-  mostrarValidar.value = true
-}
-
-async function confirmarValidacion() {
-  if (!incidencia.value) return
-  if (!motiResolucion.value.trim()) {
-    errVal.value = 'El motivo es obligatorio'
-    return
-  }
-  guardandoVal.value = true
-  errVal.value = ''
-  try {
-    const fn = accionVal.value === 'validar'
-      ? incidenciasService.validar
-      : incidenciasService.rechazar
-    const updated = await fn(incidencia.value.id, motiResolucion.value.trim())
-    incidencia.value = { ...incidencia.value, ...updated }
-    mostrarValidar.value = false
-  } catch (e: any) {
-    errVal.value = e.message ?? 'Error al validar'
-  } finally {
-    guardandoVal.value = false
-  }
-}
-
-async function guardarDescargo() {
-  if (!incidencia.value) return
-  guardandoDes.value = true
-  try {
-    await incidenciasService.actualizar(incidencia.value.id, {
-      descargo_equipo: descargo.value.trim() || null,
-    })
-    incidencia.value.descargo_equipo = descargo.value.trim() || null
-    editandoDescargo.value = false
-  } catch (e: any) {
-    error.value = e.message ?? 'Error al guardar descargo'
-  } finally {
-    guardandoDes.value = false
-  }
-}
 </script>
 
 <template>
@@ -238,73 +171,6 @@ async function guardarDescargo() {
         <p v-else class="det-texto det-texto--vacio">Sin archivos adjuntos.</p>
       </div>
 
-      <!-- Descargo del equipo -->
-      <div class="det-card">
-        <h2 class="det-section-title">Descargo del equipo</h2>
-        <template v-if="editandoDescargo">
-          <textarea v-model="descargo" rows="3" class="campo-input" placeholder="Versión del equipo…" />
-          <div class="det-acciones">
-            <button class="btn btn--ghost btn--sm" :disabled="guardandoDes" @click="editandoDescargo = false">Cancelar</button>
-            <button class="btn btn--primary btn--sm" :disabled="guardandoDes" @click="guardarDescargo">
-              {{ guardandoDes ? 'Guardando…' : 'Guardar' }}
-            </button>
-          </div>
-        </template>
-        <template v-else>
-          <p v-if="incidencia.descargo_equipo" class="det-texto">{{ incidencia.descargo_equipo }}</p>
-          <p v-else class="det-texto det-texto--vacio">Sin descargo registrado.</p>
-          <button v-if="puedeEditarDescargo" class="btn btn--ghost btn--sm" @click="editandoDescargo = true">
-            Agregar / editar descargo
-          </button>
-        </template>
-      </div>
-
-      <!-- Resolución (si ya fue validado/rechazado) -->
-      <div v-if="incidencia.estado !== 'registrado' && incidencia.motivo_resolucion" class="det-card">
-        <h2 class="det-section-title">Resolución</h2>
-        <p class="det-texto">{{ incidencia.motivo_resolucion }}</p>
-        <p v-if="incidencia.validado_at" class="det-meta">
-          {{ incidencia.estado === 'validado' ? 'Validado' : 'Rechazado' }} el {{ incidencia.validado_at?.slice(0, 10) }}
-        </p>
-      </div>
-
-      <!-- Panel de validación (admin) -->
-      <div v-if="puedeValidar" class="det-card det-card--validar">
-        <h2 class="det-section-title">Validación (admin)</h2>
-
-        <template v-if="!mostrarValidar">
-          <div class="det-acciones">
-            <button class="btn btn--rechazar" @click="iniciarValidacion('rechazar')">
-              <i class="pi pi-times-circle" /> Rechazar
-            </button>
-            <button class="btn btn--validar" @click="iniciarValidacion('validar')">
-              <i class="pi pi-check-circle" /> Validar
-            </button>
-          </div>
-        </template>
-
-        <template v-else>
-          <p class="paso-desc">
-            {{ accionVal === 'validar' ? '¿Confirmar la validación de esta incidencia?' : '¿Rechazar esta incidencia?' }}
-          </p>
-          <div class="campo-grupo">
-            <label class="campo-label">Motivo / observación <span class="req">*</span></label>
-            <textarea v-model="motiResolucion" rows="3" class="campo-input" placeholder="Escribe el motivo…" />
-          </div>
-          <div v-if="errVal" class="error-msg">{{ errVal }}</div>
-          <div class="det-acciones">
-            <button class="btn btn--ghost btn--sm" :disabled="guardandoVal" @click="mostrarValidar = false">Cancelar</button>
-            <button
-              :class="['btn', 'btn--sm', accionVal === 'validar' ? 'btn--validar' : 'btn--rechazar']"
-              :disabled="guardandoVal"
-              @click="confirmarValidacion"
-            >
-              <i v-if="guardandoVal" class="pi pi-spin pi-spinner" />
-              {{ guardandoVal ? '…' : accionVal === 'validar' ? 'Confirmar validación' : 'Confirmar rechazo' }}
-            </button>
-          </div>
-        </template>
-      </div>
     </template>
   </div>
 </template>

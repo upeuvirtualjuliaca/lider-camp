@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useSessionStore } from '@/modules/auth/store'
 import { useCampamentoStore } from '@/stores/campamento'
 import {
@@ -13,6 +13,7 @@ import {
 import { equiposService, integrantesService, type Equipo, type Integrante } from '@/modules/equipos/services/equipos.service'
 
 const router  = useRouter()
+const route   = useRoute()
 const session = useSessionStore()
 const campStore = useCampamentoStore()
 
@@ -34,32 +35,43 @@ onMounted(async () => {
 
 // ── Pasos ─────────────────────────────────────────────────────────────────────
 const paso = ref(1)
-const PASOS = [
-  { n: 1, label: 'Tipo y código' },
+
+const PASOS_DEMERITO = [
+  { n: 1, label: 'Tipo' },
   { n: 2, label: 'Equipo' },
   { n: 3, label: 'Detalles' },
-  { n: 4, label: 'Integrantes' },
-  { n: 5, label: 'Evidencia' },
-  { n: 6, label: 'Confirmar' },
+  { n: 4, label: 'Confirmar' },
 ]
+const PASOS_BONUS = [
+  { n: 1, label: 'Tipo' },
+  { n: 2, label: 'Equipo' },
+  { n: 3, label: 'Detalles' },
+  { n: 4, label: 'Confirmar' },
+]
+
+const pasosActivos = computed(() => tipo.value === 'bonus' ? PASOS_BONUS : PASOS_DEMERITO)
+const pasoFinal    = computed(() => 4)
 
 // ── Formulario ────────────────────────────────────────────────────────────────
 const tipo      = ref<'bonus' | 'demerito' | ''>('')
 const codigoSel = ref('')
 const equipoId  = ref('')
 const equipoApId = ref('')
-const fecha     = ref('')
+const fecha     = ref((route.query.fecha as string) || new Date().toISOString().slice(0, 10))
 const hora      = ref('')
 const hecho     = ref('')
-const alcance   = ref('equipo')
-const cantPersonas = ref(1)
+const alcance         = ref('equipo')
+const puntosBonus     = ref<number>(25)
+const puntosDemerito  = ref<number>(0)
+const cantPersonas    = ref(1)
 const advertenciaRef = ref('')
 const justificacionGrupal = ref('')
 const integranteIds  = ref<string[]>([])
-const archivos       = ref<File[]>([])
+const archivos         = ref<File[]>([])
+const fotosBonus       = ref<File[]>([])
+const fotosBonusUrls   = ref<string[]>([])
 const guardando      = ref(false)
 const error          = ref('')
-const incidenciaCreada = ref('')
 
 // ── Código seleccionado ────────────────────────────────────────────────────────
 const codigoInfo = computed<IncidenciaCodigo | null>(
@@ -70,6 +82,25 @@ const codigosFiltrados = computed(() =>
   tipo.value ? codigos.value.filter((c) => c.tipo === tipo.value) : [],
 )
 
+// Al cambiar tipo: auto-rellenar hora y auto-seleccionar código
+watch(tipo, (t) => {
+  const now = new Date()
+  hora.value = now.toTimeString().slice(0, 5)
+  codigoSel.value = ''
+  puntosDemerito.value = 0
+  if (t === 'bonus') {
+    const primerBonus = codigos.value.find((c) => c.tipo === 'bonus')
+    codigoSel.value = primerBonus?.codigo ?? ''
+  } else if (t === 'demerito') {
+    // Auto-seleccionar primer demerito sin requerimientos especiales
+    const primerDemerito = codigos.value.find(
+      (c) => c.tipo === 'demerito' && !c.requiere_advertencia && !c.requiere_equipo_apoyado && !c.por_persona
+    )
+    codigoSel.value = primerDemerito?.codigo ?? ''
+    puntosDemerito.value = primerDemerito?.puntos ?? 0
+  }
+})
+
 // Al cambiar equipo, cargar integrantes
 watch(equipoId, async (id) => {
   integrantes.value = []
@@ -78,29 +109,34 @@ watch(equipoId, async (id) => {
 })
 
 // Al cambiar código, resetear campos específicos
-watch(codigoSel, () => {
+watch(codigoSel, (nuevo) => {
   advertenciaRef.value = ''
   justificacionGrupal.value = ''
   cantPersonas.value = 1
   integranteIds.value = []
+  const cat = codigos.value.find((c) => c.codigo === nuevo)
+  puntosDemerito.value = cat?.puntos ?? 0
+})
+
+// D6: actualizar total al cambiar cantidad de personas
+watch(cantPersonas, (n) => {
+  if (codigoInfo.value?.por_persona) {
+    puntosDemerito.value = (codigoInfo.value.puntos ?? 0) * n
+  }
 })
 
 // ── Validación por paso ───────────────────────────────────────────────────────
 const puedeAvanzar = computed(() => {
   switch (paso.value) {
-    case 1: return !!tipo.value && !!codigoSel.value
-    case 2: {
-      if (!equipoId.value) return false
-      if (codigoInfo.value?.requiere_equipo_apoyado && !equipoApId.value) return false
-      return true
-    }
+    case 1: return !!tipo.value
+    case 2: return !!equipoId.value
     case 3: {
-      if (!fecha.value || !hora.value || hecho.value.trim().length < 10) return false
-      if (codigoInfo.value?.requiere_advertencia && !advertenciaRef.value.trim()) return false
+      if (!hora.value || hecho.value.trim().length < 10) return false
+      if (tipo.value === 'demerito') {
+        if (!puntosDemerito.value || puntosDemerito.value <= 0) return false
+      }
       return true
     }
-    case 4: return true  // integrantes opcionales excepto D6
-    case 5: return true  // evidencia opcional
     default: return true
   }
 })
@@ -113,10 +149,69 @@ const integrantesObligatorios = computed(() =>
 // ── Navegación ────────────────────────────────────────────────────────────────
 function avanzar() {
   if (!puedeAvanzar.value) return
-  if (paso.value === 4 && integrantesObligatorios.value) return
   paso.value++
 }
 function retroceder() { paso.value-- }
+
+// ── Cámara ────────────────────────────────────────────────────────────────────
+const camaraActiva  = ref(false)
+const camaraError   = ref('')
+const videoRef      = ref<HTMLVideoElement | null>(null)
+const streamRef     = ref<MediaStream | null>(null)
+
+async function abrirCamara() {
+  camaraError.value = ''
+  camaraActiva.value = true
+  await nextTick()
+  try {
+    // Intentar cámara trasera primero (móvil/tablet), luego cualquier cámara (laptop)
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+    } catch {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+    }
+    streamRef.value = stream
+    if (videoRef.value) {
+      videoRef.value.srcObject = stream
+    }
+  } catch {
+    camaraActiva.value = false
+    camaraError.value = 'No se pudo acceder a la cámara. Verifica los permisos del navegador.'
+  }
+}
+
+function cerrarCamara() {
+  streamRef.value?.getTracks().forEach((t) => t.stop())
+  streamRef.value = null
+  camaraActiva.value = false
+}
+
+function capturarFoto() {
+  if (!videoRef.value) return
+  const video = videoRef.value
+  const w = video.videoWidth  || video.clientWidth
+  const h = video.videoHeight || video.clientHeight
+  if (!w || !h) return
+  const canvas = document.createElement('canvas')
+  canvas.width  = w
+  canvas.height = h
+  canvas.getContext('2d')!.drawImage(video, 0, 0, w, h)
+  canvas.toBlob((blob) => {
+    if (blob) {
+      const file = new File([blob], `bonus_${Date.now()}.jpg`, { type: 'image/jpeg' })
+      fotosBonus.value = [...fotosBonus.value, file]
+      fotosBonusUrls.value = [...fotosBonusUrls.value, URL.createObjectURL(blob)]
+    }
+    cerrarCamara()   // cerrar DESPUÉS de guardar el blob
+  }, 'image/jpeg', 0.85)
+}
+
+function quitarFotoBonus(i: number) {
+  URL.revokeObjectURL(fotosBonusUrls.value[i]!)
+  fotosBonus.value    = fotosBonus.value.filter((_, idx) => idx !== i)
+  fotosBonusUrls.value = fotosBonusUrls.value.filter((_, idx) => idx !== i)
+}
 
 // ── Archivos ──────────────────────────────────────────────────────────────────
 function onArchivoChange(e: Event) {
@@ -135,36 +230,28 @@ async function guardar() {
   error.value = ''
 
   try {
-    // 1. Crear incidencia
-    const puntos = codigoInfo.value!.por_persona
-      ? codigoInfo.value!.puntos * cantPersonas.value
-      : codigoInfo.value!.puntos
+    const puntos = tipo.value === 'bonus'
+      ? puntosBonus.value
+      : puntosDemerito.value
 
     const inc = await incidenciasService.crear({
       codigo: codigoSel.value,
       equipo_id: equipoId.value,
-      equipo_apoyado_id: codigoInfo.value?.requiere_equipo_apoyado ? equipoApId.value : null,
+      equipo_apoyado_id: null,
       fecha: fecha.value,
       hora: hora.value,
       hecho: hecho.value.trim(),
-      alcance: alcance.value,
-      cantidad_personas: cantPersonas.value,
-      advertencia_referencia: codigoInfo.value?.requiere_advertencia ? advertenciaRef.value.trim() || null : null,
-      justificacion_grupal: justificacionGrupal.value.trim() || null,
+      alcance: 'equipo',
+      cantidad_personas: 1,
+      advertencia_referencia: null,
+      justificacion_grupal: null,
       puntos,
       registrado_por: session.user.id,
     })
 
-    incidenciaCreada.value = inc.id
-
-    // 2. Integrantes
-    if (integranteIds.value.length) {
-      await incidenciaIntegrantesService.setPorIncidencia(inc.id, integranteIds.value)
-    }
-
-    // 3. Evidencias
-    for (const arch of archivos.value) {
-      await evidenciasService.subir(inc.id, arch, session.user.id)
+    // Fotos (bonus y demerito usan la misma cámara)
+    for (const foto of fotosBonus.value) {
+      await evidenciasService.subir(inc.id, foto, session.user.id)
     }
 
     router.push(`/panel/incidencias/${inc.id}`)
@@ -196,7 +283,7 @@ function nombreEquipo(id: string) {
     <!-- Indicador de pasos -->
     <div class="wizard-steps">
       <div
-        v-for="p in PASOS"
+        v-for="p in pasosActivos"
         :key="p.n"
         :class="['step-dot', { 'step-dot--active': paso === p.n, 'step-dot--done': paso > p.n }]"
       >
@@ -205,54 +292,27 @@ function nombreEquipo(id: string) {
       </div>
     </div>
 
-    <!-- PASO 1: Tipo y código -->
+    <!-- PASO 1: Tipo -->
     <div v-if="paso === 1" class="wizard-body">
       <h2 class="paso-title">¿Qué tipo de incidencia?</h2>
 
       <div class="tipo-btns">
         <button
           :class="['tipo-btn', tipo === 'bonus' && 'tipo-btn--active tipo-btn--bonus']"
-          @click="tipo = 'bonus'; codigoSel = ''"
+          @click="tipo = 'bonus'"
         >
           <i class="pi pi-star-fill" />
           <span>Bonus</span>
-          <small>B1, B2</small>
+          <small>+50 pts máx.</small>
         </button>
         <button
           :class="['tipo-btn', tipo === 'demerito' && 'tipo-btn--active tipo-btn--demerito']"
-          @click="tipo = 'demerito'; codigoSel = ''"
+          @click="tipo = 'demerito'"
         >
           <i class="pi pi-exclamation-triangle" />
           <span>Demérito</span>
           <small>D1–D6</small>
         </button>
-      </div>
-
-      <div v-if="tipo" class="campo-grupo">
-        <label class="campo-label">Código</label>
-        <div class="codigo-grid">
-          <button
-            v-for="c in codigosFiltrados"
-            :key="c.codigo"
-            :class="['codigo-btn', codigoSel === c.codigo && 'codigo-btn--active']"
-            @click="codigoSel = c.codigo"
-          >
-            <strong>{{ c.codigo }}</strong>
-            <span>{{ c.nombre }}</span>
-            <em>{{ c.por_persona ? `${c.puntos} pts/persona` : `${c.puntos} pts` }}</em>
-          </button>
-        </div>
-      </div>
-
-      <div v-if="codigoInfo" class="codigo-info-box">
-        <p v-if="codigoInfo.tope_equipo">Tope por equipo: <strong>{{ codigoInfo.tope_equipo }} pts</strong></p>
-        <p v-if="codigoInfo.max_acciones">Máx. acciones: <strong>{{ codigoInfo.max_acciones }}</strong></p>
-        <p v-if="codigoInfo.requiere_advertencia" class="info--advertencia">
-          ⚠ Requiere referencia a la advertencia previa
-        </p>
-        <p v-if="codigoInfo.requiere_equipo_apoyado" class="info--b2">
-          ℹ Requiere seleccionar el equipo apoyado
-        </p>
       </div>
     </div>
 
@@ -280,141 +340,144 @@ function nombreEquipo(id: string) {
       </div>
     </div>
 
-    <!-- PASO 3: Detalles -->
-    <div v-else-if="paso === 3" class="wizard-body">
+    <!-- PASO 3: Detalles — Bonus -->
+    <div v-else-if="paso === 3 && tipo === 'bonus'" class="wizard-body">
       <h2 class="paso-title">¿Cuándo y qué pasó?</h2>
 
       <div class="campo-grupo">
-        <label class="campo-label">Fecha</label>
-        <input v-model="fecha" type="date" class="campo-input" />
+        <label class="campo-label">Nombre / Tipo de incidencia <small>(min. 10 caracteres)</small></label>
+        <textarea v-model="hecho" rows="4" class="campo-input" placeholder="Describe el servicio o cooperación observado…" />
       </div>
+
+      <!-- Captura de foto -->
       <div class="campo-grupo">
-        <label class="campo-label">Hora</label>
-        <input v-model="hora" type="time" class="campo-input" />
-      </div>
-      <div class="campo-grupo">
-        <label class="campo-label">Hecho <small>(min. 10 caracteres)</small></label>
-        <textarea v-model="hecho" rows="4" class="campo-input" placeholder="Describe el hecho objetivamente…" />
-      </div>
-      <div class="campo-grupo">
-        <label class="campo-label">Alcance</label>
-        <select v-model="alcance" class="campo-input">
-          <option value="equipo">Equipo completo</option>
-          <option value="integrantes">Integrantes específicos</option>
-        </select>
-      </div>
-
-      <div v-if="codigoInfo?.codigo === 'D6'" class="campo-grupo">
-        <label class="campo-label">Cantidad de personas involucradas</label>
-        <input v-model.number="cantPersonas" type="number" min="1" class="campo-input" />
-        <small class="campo-hint">Puntos: {{ codigoInfo.puntos }} × {{ cantPersonas }} = {{ codigoInfo.puntos * cantPersonas }} pts</small>
-      </div>
-
-      <div v-if="codigoInfo?.requiere_advertencia" class="campo-grupo">
-        <label class="campo-label">Referencia a la advertencia previa <span class="req">*</span></label>
-        <input v-model="advertenciaRef" type="text" class="campo-input" placeholder="Hora y contexto de la advertencia…" />
-      </div>
-
-      <div class="campo-grupo">
-        <label class="campo-label">Justificación / contexto grupal <small>(opcional)</small></label>
-        <textarea v-model="justificacionGrupal" rows="2" class="campo-input" placeholder="Contexto adicional…" />
-      </div>
-    </div>
-
-    <!-- PASO 4: Integrantes -->
-    <div v-else-if="paso === 4" class="wizard-body">
-      <h2 class="paso-title">Integrantes involucrados</h2>
-      <p class="paso-desc">
-        <template v-if="codigoInfo?.codigo === 'D6'">
-          D6 — Alcohol: selecciona a las personas involucradas
-          <strong class="req">(obligatorio)</strong>.
-        </template>
-        <template v-else>
-          Opcional. Selecciona si la incidencia afecta a personas específicas.
-        </template>
-      </p>
-
-      <div v-if="integrantes.length" class="integrantes-grid">
-        <button
-          v-for="ing in integrantes"
-          :key="ing.id"
-          :class="['integrante-btn', integranteIds.includes(ing.id) && 'integrante-btn--sel']"
-          :disabled="(ing as any).expulsado"
-          @click="toggleIntegrante(ing.id)"
-        >
-          {{ ing.apellidos }}, {{ ing.nombres }}
-          <span v-if="(ing as any).expulsado" class="tag-expulsado">expulsado</span>
+        <label class="campo-label">Foto <small>(opcional)</small></label>
+        <button type="button" class="camara-btn" @click="abrirCamara">
+          <i class="pi pi-camera" />
+          <span>Tomar foto</span>
         </button>
+        <p v-if="camaraError" class="error-msg">{{ camaraError }}</p>
+        <div v-if="fotosBonus.length" class="fotos-preview">
+          <div v-for="(_, i) in fotosBonus" :key="i" class="foto-thumb">
+            <img :src="fotosBonusUrls[i]" alt="foto" />
+            <button class="foto-thumb__quitar" @click="quitarFotoBonus(i)">✕</button>
+          </div>
+        </div>
       </div>
-      <p v-else class="paso-desc">
-        <template v-if="equipoId">Cargando integrantes…</template>
-        <template v-else>Primero selecciona un equipo.</template>
-      </p>
 
-      <p v-if="integrantesObligatorios" class="error-msg">
-        Para D6 debes seleccionar al menos un integrante.
-      </p>
-    </div>
-
-    <!-- PASO 5: Evidencia -->
-    <div v-else-if="paso === 5" class="wizard-body">
-      <h2 class="paso-title">Evidencia <small>(opcional)</small></h2>
-
-      <label class="upload-area">
-        <input type="file" accept="image/*,application/pdf" multiple @change="onArchivoChange" />
-        <i class="pi pi-upload" />
-        <span>Toca para adjuntar fotos o PDF</span>
-        <small>JPG, PNG, WEBP, HEIC, PDF — máx. 10 MB c/u</small>
-      </label>
-
-      <div v-if="archivos.length" class="archivos-lista">
-        <div v-for="(a, i) in archivos" :key="i" class="archivo-chip">
-          <i :class="a.type.startsWith('image') ? 'pi pi-image' : 'pi pi-file-pdf'" />
-          <span class="archivo-chip__nombre">{{ a.name }}</span>
-          <button class="archivo-chip__quitar" @click="quitarArchivo(i)">✕</button>
+      <div class="campo-grupo">
+        <label class="campo-label">Puntos a aplicar</label>
+        <div class="puntos-grid">
+          <button
+            v-for="pts in [12.5, 25, 50]"
+            :key="pts"
+            :class="['puntos-btn', puntosBonus === pts && 'puntos-btn--active']"
+            @click="puntosBonus = pts"
+          >
+            <strong>{{ pts }}</strong>
+            <span>pts</span>
+          </button>
         </div>
       </div>
     </div>
 
-    <!-- PASO 6: Confirmar -->
-    <div v-else-if="paso === 6" class="wizard-body">
+    <!-- PASO 3: Detalles — Deméritos -->
+    <div v-else-if="paso === 3 && tipo === 'demerito'" class="wizard-body">
+      <h2 class="paso-title">¿Cuándo y qué pasó?</h2>
+
+      <div class="campo-grupo">
+        <label class="campo-label">Nombre / Tipo de incidencia <small>(min. 10 caracteres)</small></label>
+        <textarea v-model="hecho" rows="4" class="campo-input" placeholder="Describe el hecho objetivamente…" />
+      </div>
+
+      <!-- Captura de foto -->
+      <div class="campo-grupo">
+        <label class="campo-label">Foto <small>(opcional)</small></label>
+        <button type="button" class="camara-btn" @click="abrirCamara">
+          <i class="pi pi-camera" />
+          <span>Tomar foto</span>
+        </button>
+        <p v-if="camaraError" class="error-msg">{{ camaraError }}</p>
+        <div v-if="fotosBonus.length" class="fotos-preview">
+          <div v-for="(_, i) in fotosBonus" :key="i" class="foto-thumb">
+            <img :src="fotosBonusUrls[i]" alt="foto" />
+            <button class="foto-thumb__quitar" @click="quitarFotoBonus(i)">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="campo-grupo">
+        <label class="campo-label">Puntos a aplicar <span class="req">*</span></label>
+        <input v-model.number="puntosDemerito" type="number" min="0" step="0.5" class="campo-input" placeholder="Ej. 10" />
+      </div>
+    </div>
+
+    <!-- PASO 4 (Bonus): Confirmar -->
+    <div v-else-if="paso === 4 && tipo === 'bonus'" class="wizard-body">
       <h2 class="paso-title">Confirmar registro</h2>
 
       <div class="resumen">
         <div class="resumen-fila">
-          <span class="resumen-label">Tipo / Código</span>
-          <span>
-            <span :class="['badge', tipo === 'bonus' ? 'badge--azul' : 'badge--naranja']">{{ codigoSel }}</span>
-            {{ codigoInfo?.nombre }}
-          </span>
+          <span class="resumen-label">Tipo</span>
+          <span><span class="badge badge--azul">BONUS</span> {{ codigoInfo?.nombre }}</span>
         </div>
         <div class="resumen-fila">
           <span class="resumen-label">Equipo</span>
           <span>{{ nombreEquipo(equipoId) }}</span>
-        </div>
-        <div v-if="equipoApId" class="resumen-fila">
-          <span class="resumen-label">Equipo apoyado</span>
-          <span>{{ nombreEquipo(equipoApId) }}</span>
         </div>
         <div class="resumen-fila">
           <span class="resumen-label">Fecha / Hora</span>
           <span>{{ fecha }} {{ hora }}</span>
         </div>
         <div class="resumen-fila">
-          <span class="resumen-label">Hecho</span>
+          <span class="resumen-label">Nombre</span>
           <span>{{ hecho }}</span>
         </div>
         <div class="resumen-fila">
           <span class="resumen-label">Puntos</span>
-          <strong>{{ codigoInfo?.por_persona ? codigoInfo.puntos * cantPersonas : codigoInfo?.puntos }} pts</strong>
+          <strong>{{ puntosBonus }} pts</strong>
         </div>
-        <div v-if="integranteIds.length" class="resumen-fila">
-          <span class="resumen-label">Integrantes</span>
-          <span>{{ integranteIds.length }} seleccionado(s)</span>
+        <div v-if="fotosBonus.length" class="resumen-fila">
+          <span class="resumen-label">Fotos</span>
+          <span>{{ fotosBonus.length }} foto(s)</span>
         </div>
-        <div v-if="archivos.length" class="resumen-fila">
-          <span class="resumen-label">Evidencia</span>
-          <span>{{ archivos.length }} archivo(s)</span>
+        <div class="resumen-fila resumen-fila--nota">
+          <span class="resumen-label">Estado</span>
+          <span class="badge badge--gris">Registrado (pendiente de validación)</span>
+        </div>
+      </div>
+
+      <div v-if="error" class="error-msg">{{ error }}</div>
+    </div>
+
+    <!-- PASO 4: Confirmar (solo demerito) -->
+    <div v-else-if="paso === 4 && tipo === 'demerito'" class="wizard-body">
+      <h2 class="paso-title">Confirmar registro</h2>
+
+      <div class="resumen">
+        <div class="resumen-fila">
+          <span class="resumen-label">Tipo</span>
+          <span><span class="badge badge--naranja">{{ codigoSel }}</span> {{ codigoInfo?.nombre }}</span>
+        </div>
+        <div class="resumen-fila">
+          <span class="resumen-label">Equipo</span>
+          <span>{{ nombreEquipo(equipoId) }}</span>
+        </div>
+        <div class="resumen-fila">
+          <span class="resumen-label">Fecha / Hora</span>
+          <span>{{ fecha }} {{ hora }}</span>
+        </div>
+        <div class="resumen-fila">
+          <span class="resumen-label">Descripción</span>
+          <span>{{ hecho }}</span>
+        </div>
+        <div class="resumen-fila">
+          <span class="resumen-label">Puntos</span>
+          <strong>−{{ puntosDemerito }} pts</strong>
+        </div>
+        <div v-if="fotosBonus.length" class="resumen-fila">
+          <span class="resumen-label">Fotos</span>
+          <span>{{ fotosBonus.length }} foto(s)</span>
         </div>
         <div class="resumen-fila resumen-fila--nota">
           <span class="resumen-label">Estado</span>
@@ -432,9 +495,9 @@ function nombreEquipo(id: string) {
       </button>
       <div class="wizard-nav__right">
         <button
-          v-if="paso < 6"
+          v-if="paso < pasoFinal"
           class="btn btn--primary"
-          :disabled="!puedeAvanzar || (paso === 4 && integrantesObligatorios)"
+          :disabled="!puedeAvanzar"
           @click="avanzar"
         >
           Siguiente →
@@ -451,6 +514,21 @@ function nombreEquipo(id: string) {
       </div>
     </div>
   </div>
+
+  <!-- Modal cámara -->
+  <teleport to="body">
+    <div v-if="camaraActiva" class="camara-overlay">
+      <div class="camara-modal">
+        <video ref="videoRef" autoplay playsinline class="camara-video" />
+        <div class="camara-modal__btns">
+          <button type="button" class="btn btn--ghost" @click="cerrarCamara">Cancelar</button>
+          <button type="button" class="btn btn--primary camara-capturar" @click="capturarFoto">
+            <i class="pi pi-camera" /> Capturar
+          </button>
+        </div>
+      </div>
+    </div>
+  </teleport>
 </template>
 
 <style scoped>
@@ -500,7 +578,6 @@ function nombreEquipo(id: string) {
   min-width: 52px;
   position: relative;
 }
-/* connector line between dots */
 .step-dot:not(:last-child)::after {
   content: '';
   position: absolute;
@@ -788,4 +865,121 @@ textarea.campo-input { resize: vertical; min-height: 88px; }
 .btn--ghost:disabled { opacity: 0.5; }
 
 .error-msg { color: #dc2626; font-size: 0.83rem; margin-top: 0.5rem; }
+
+/* ── Cámara bonus ── */
+.camara-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 48px;
+  padding: 0.6rem 1.1rem;
+  border: 2px solid #16a34a;
+  border-radius: 10px;
+  background: #f0fdf4;
+  color: #15803d;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.camara-btn:hover { background: #dcfce7; }
+.camara-btn i { font-size: 1.2rem; }
+
+
+.fotos-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+.foto-thumb {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid #d1d5db;
+}
+.foto-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.foto-thumb__quitar {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: rgba(0,0,0,.55);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Puntos bonus ── */
+.puntos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+}
+.puntos-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-height: 64px;
+  padding: 0.75rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.puntos-btn strong { font-size: 1.3rem; color: #111827; }
+.puntos-btn span   { font-size: 0.75rem; color: #9ca3af; font-weight: 600; }
+.puntos-btn:hover  { border-color: #d1d5db; background: #f9fafb; }
+.puntos-btn--active { border-color: #16a34a; background: #f0fdf4; }
+.puntos-btn--active strong { color: #15803d; }
+.puntos-btn--active span   { color: #16a34a; }
+</style>
+
+<!-- Estilos globales para el modal de cámara (teleport sale del scoped) -->
+<style>
+.camara-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.88);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.camara-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  max-width: 480px;
+}
+.camara-video {
+  width: 100%;
+  border-radius: 12px;
+  background: #000;
+  max-height: 60dvh;
+  object-fit: cover;
+}
+.camara-modal__btns {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+.camara-capturar { min-width: 140px; justify-content: center; }
 </style>

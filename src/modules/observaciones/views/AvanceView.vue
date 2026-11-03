@@ -14,6 +14,12 @@ import {
   evaluacionesService,
   type LiderazgoEquipoDia,
 } from '@/modules/liderazgo/services/liderazgo.service'
+import {
+  actividadesService,
+  evalRegistrosService,
+  type ActividadConProgramacion,
+} from '@/modules/asistencia/services/asistencia.service'
+import { incidenciasService } from '@/modules/incidencias/services/incidencias.service'
 import { useSessionStore } from '@/modules/auth/store'
 import { useCampamentoStore } from '@/stores/campamento'
 
@@ -46,12 +52,19 @@ const error = ref('')
 
 const dias = ref<DiasEvaluacion[]>([])
 const momentoActivo = ref<string>('')
+const momentosConProg = ref<Set<string>>(new Set())
 
 const equipos = ref<Equipo[]>([])
 const programacionDia = ref<ProgramacionDia[]>([])
 const puntajesDia = ref<PuntajeEquipoDia[]>([])
 const progreso = ref<ProgresoEvaluacion[]>([])
 const liderazgoDia = ref<LiderazgoEquipoDia[]>([])
+const actividadesDia = ref<ActividadConProgramacion[]>([])
+// clave: `${actividad_id}|${equipo_id}` → puntaje
+const actMap = ref<Map<string, number | null>>(new Map())
+// equipo_id → total bonus / deméritos
+const bonusMap    = ref<Map<string, number>>(new Map())
+const demeritosMap = ref<Map<string, number>>(new Map())
 
 // Observaciones por criterio+equipo: clave `${programacion_id}|${equipo_id}`
 const obsMap = ref<Map<string, number | null>>(new Map())
@@ -67,11 +80,14 @@ async function cargar() {
   cargando.value = true
   error.value = ''
   try {
-    const [, diasData, equiposData] = await Promise.all([
+    const [, diasData, equiposData, momentosRubrica, conteosAct] = await Promise.all([
       cargarCampamento(),
       campStore.selectedId ? diasService.getTodos(campStore.selectedId) : Promise.resolve([]),
       equiposService.getTodos(campStore.selectedId ?? undefined),
+      programacionRubricaService.getMomentosConProgramacion(campStore.selectedId),
+      campStore.selectedId ? actividadesService.getConteosPorCampamento(campStore.selectedId) : Promise.resolve({} as Record<string, number>),
     ])
+    momentosConProg.value = new Set([...momentosRubrica, ...Object.keys(conteosAct)])
 
     momentoActivo.value = detectarMomentoActual()
     dias.value = diasData
@@ -89,6 +105,10 @@ onMounted(cargar)
 watch(() => campStore.selectedId, cargar)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+const momentosFiltrados = computed(() =>
+  momentos.value.filter((m) => momentosConProg.value.has(m)),
+)
+
 const diaActual = computed<DiasEvaluacion | undefined>(() =>
   dias.value.find((d) => d.momento === momentoActivo.value),
 )
@@ -107,6 +127,26 @@ const progresoBg = computed(() => {
   return 'bg-red-400'
 })
 
+// Total del día por equipo: rúbrica + actividades + liderazgo + bonus − deméritos
+const totalDiaMap = computed(() => {
+  const map = new Map<string, number>()
+  for (const eq of equipos.value) {
+    const rubrica   = Number(puntajesDia.value.find((p) => p.equipo_id === eq.id)?.suma_puntaje ?? 0)
+    const lid       = Number(liderazgoDia.value.find((l) => l.equipo_id === eq.id)?.puntos_obtenidos ?? 0)
+    const bonus     = bonusMap.value.get(eq.id) ?? 0
+    const demeritos = demeritosMap.value.get(eq.id) ?? 0
+
+    // Suma de actividades de este equipo
+    let actividades = 0
+    for (const act of actividadesDia.value) {
+      actividades += actMap.value.get(`${act.id}|${eq.id}`) ?? 0
+    }
+
+    map.set(eq.id, Math.max(0, rubrica + lid + actividades + bonus - demeritos))
+  }
+  return map
+})
+
 async function cargarDatosDia() {
   try {
     const campId = campStore.selectedId
@@ -116,15 +156,60 @@ async function cargarDatosDia() {
     if (errProg) throw new Error(errProg)
     programacionDia.value = progData as unknown as ProgramacionDia[]
 
-    const [puntajes, progresoData, lidData] = await Promise.all([
+    const [puntajes, progresoData, lidData, actData] = await Promise.all([
       observacionesService.getPuntajeEquipoDia(momentoActivo.value, campId),
       observacionesService.getProgreso(campId),
       evaluacionesService.getResumenDia(momentoActivo.value, campId),
+      actividadesService.getPorDia(momentoActivo.value),
     ])
 
     puntajesDia.value = puntajes
     progreso.value = progresoData
     liderazgoDia.value = lidData
+    const actFiltradas = actData.filter((a) => a.estado !== 'cancelada')
+    // Contar actividades por programacion_id para dividir el puntaje_max
+    const contProg: Record<string, number> = {}
+    for (const a of actFiltradas) {
+      const pid = a.programacion_id ?? ''
+      contProg[pid] = (contProg[pid] ?? 0) + 1
+    }
+    actividadesDia.value = actFiltradas.map((a) => ({
+      ...a,
+      _puntaje_individual: Math.round(a.programacion.puntaje_max / (contProg[a.programacion_id ?? ''] ?? 1)),
+    })) as any
+
+    // Cargar puntajes por equipo para cada actividad (suma de actividad_eval_registros)
+    const newActMap = new Map<string, number | null>()
+    await Promise.all(
+      actFiltradas.map(async (a) => {
+        try {
+          const registros = await evalRegistrosService.getPorActividad(a.id)
+          // Sumar puntaje por equipo
+          const totales: Record<string, number> = {}
+          for (const r of registros) {
+            totales[r.equipo_id] = (totales[r.equipo_id] ?? 0) + (r.puntaje ?? 0)
+          }
+          for (const [equipoId, total] of Object.entries(totales)) {
+            newActMap.set(`${a.id}|${equipoId}`, total)
+          }
+        } catch { /* silencioso */ }
+      }),
+    )
+    actMap.value = newActMap
+
+    // Cargar bonus y deméritos validados solo del día activo
+    const newBonusMap     = new Map<string, number>()
+    const newDemeritosMap = new Map<string, number>()
+    const incData = await incidenciasService.getValidadasPorMomento(momentoActivo.value, campId)
+    for (const inc of incData) {
+      if (inc.tipo === 'bonus') {
+        newBonusMap.set(inc.equipo_id, (newBonusMap.get(inc.equipo_id) ?? 0) + inc.puntos)
+      } else if (inc.tipo === 'demerito') {
+        newDemeritosMap.set(inc.equipo_id, (newDemeritosMap.get(inc.equipo_id) ?? 0) + inc.puntos)
+      }
+    }
+    bonusMap.value     = newBonusMap
+    demeritosMap.value = newDemeritosMap
 
     await cargarObservacionesDetalle()
   } catch (e: unknown) {
@@ -255,7 +340,7 @@ async function supabase_safe<T>(fn: () => Promise<T>): Promise<{ data: T; error:
       <!-- ── Selector de día ── -->
       <div class="av-dias">
         <button
-          v-for="m in momentos"
+          v-for="m in momentosFiltrados"
           :key="m"
           :class="['av-dia-btn',
             momentoActivo === m && 'av-dia-btn--active',
@@ -340,9 +425,9 @@ async function supabase_safe<T>(fn: () => Promise<T>): Promise<{ data: T; error:
             </thead>
             <tbody>
               <!-- Filas de criterios -->
-              <tr v-for="prog in programacionDia" :key="prog.id" class="av-fila">
+              <tr v-for="(prog, idx) in programacionDia" :key="prog.id" class="av-fila">
                 <td class="av-td av-td--sticky">
-                  <span class="av-criterio-badge">{{ prog.criterios.codigo }}</span>
+                  <span class="av-criterio-num">{{ idx + 1 }}</span>
                   <span class="av-criterio-nombre">{{ prog.criterios.nombre }}</span>
                 </td>
                 <td
@@ -353,6 +438,25 @@ async function supabase_safe<T>(fn: () => Promise<T>): Promise<{ data: T; error:
                   <template v-if="getCelda(prog, eq).tipo === 'puntaje'">{{ getCelda(prog, eq).valor }}</template>
                   <template v-else-if="getCelda(prog, eq).tipo === 'cancelado'">✕</template>
                   <template v-else-if="getCelda(prog, eq).tipo === 'na'">—</template>
+                </td>
+              </tr>
+
+              <!-- Filas de actividades -->
+              <tr v-for="act in actividadesDia" :key="act.id" class="av-fila av-fila--act">
+                <td class="av-td av-td--sticky">
+                  <span class="av-criterio-num">Act</span>
+                  <span class="av-criterio-nombre">{{ act.nombre }}</span>
+                  <span class="av-act-pts">{{ (act as any)._puntaje_individual }} pts</span>
+                </td>
+                <td
+                  v-for="eq in equipos"
+                  :key="eq.id"
+                  :class="['av-td', 'av-td--celda',
+                    actMap.get(`${act.id}|${eq.id}`) != null
+                      ? 'av-celda--puntaje'
+                      : 'av-celda--pendiente']"
+                >
+                  {{ actMap.get(`${act.id}|${eq.id}`) ?? '—' }}
                 </td>
               </tr>
 
@@ -369,6 +473,46 @@ async function supabase_safe<T>(fn: () => Promise<T>): Promise<{ data: T; error:
                 >
                   {{ getLidCelda(eq).texto }}
                 </td>
+              </tr>
+
+              <!-- Fila Bonus -->
+              <tr v-if="bonusMap.size > 0" class="av-fila av-fila--bonus">
+                <td class="av-td av-td--sticky">
+                  <span class="av-criterio-num">B</span>
+                  <span class="av-criterio-nombre">Bonus (validados)</span>
+                </td>
+                <td
+                  v-for="eq in equipos"
+                  :key="eq.id"
+                  :class="['av-td', 'av-td--celda',
+                    bonusMap.get(eq.id) ? 'av-celda--bonus' : 'av-celda--na']"
+                >{{ bonusMap.get(eq.id) ?? '—' }}</td>
+              </tr>
+
+              <!-- Fila Deméritos -->
+              <tr v-if="demeritosMap.size > 0" class="av-fila av-fila--demerito">
+                <td class="av-td av-td--sticky">
+                  <span class="av-criterio-num">D</span>
+                  <span class="av-criterio-nombre">Deméritos (validados)</span>
+                </td>
+                <td
+                  v-for="eq in equipos"
+                  :key="eq.id"
+                  :class="['av-td', 'av-td--celda',
+                    demeritosMap.get(eq.id) ? 'av-celda--demerito' : 'av-celda--na']"
+                >{{ demeritosMap.get(eq.id) ?? '—' }}</td>
+              </tr>
+
+              <!-- Fila Total día -->
+              <tr class="av-fila av-fila--total">
+                <td class="av-td av-td--sticky av-td--total">
+                  <span class="av-criterio-nombre" style="font-weight:800">Total del día</span>
+                </td>
+                <td
+                  v-for="eq in equipos"
+                  :key="eq.id"
+                  class="av-td av-td--celda av-celda--total"
+                >{{ totalDiaMap.get(eq.id) ?? 0 }}</td>
               </tr>
 
               <!-- Sin datos -->
@@ -659,7 +803,15 @@ async function supabase_safe<T>(fn: () => Promise<T>): Promise<{ data: T; error:
 
 /* Filas */
 .av-fila:hover td { filter: brightness(.97); }
-.av-fila--lid td  { background: #fafafa; }
+.av-fila--lid td     { background: #fafafa; }
+.av-fila--act td     { background: #f0f9ff; }
+.av-fila--bonus td   { background: #f0fdf4; }
+.av-fila--demerito td { background: #fff7ed; }
+.av-celda--bonus    { background: #bbf7d0 !important; color: #166534 !important; font-weight: 700; }
+.av-celda--demerito { background: #fed7aa !important; color: #9a3412 !important; font-weight: 700; }
+.av-fila--total td  { background: #1e293b; }
+.av-td--total       { background: #1e293b !important; }
+.av-celda--total    { background: #1e293b !important; color: #f1f5f9 !important; font-weight: 800; font-size: 0.85rem; }
 
 .av-td {
   padding: 0.45rem 0.4rem;
@@ -683,6 +835,14 @@ async function supabase_safe<T>(fn: () => Promise<T>): Promise<{ data: T; error:
 }
 
 /* Criterio badge y nombre */
+.av-criterio-num {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #9ca3af;
+  min-width: 14px;
+  text-align: right;
+  flex-shrink: 0;
+}
 .av-criterio-badge {
   font-size: 0.62rem; font-weight: 800;
   background: #f3f4f6; color: #4b5563;
@@ -691,6 +851,17 @@ async function supabase_safe<T>(fn: () => Promise<T>): Promise<{ data: T; error:
 }
 .av-criterio-badge--lid {
   background: #e0e7ff; color: #3730a3;
+}
+.av-act-pts {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #0369a1;
+  background: #e0f2fe;
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 .av-criterio-nombre {
   font-size: 0.72rem; color: #374151;

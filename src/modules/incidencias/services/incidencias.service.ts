@@ -68,6 +68,28 @@ export const incidenciasService = {
     return (data ?? []) as unknown as Incidencia[]
   },
 
+  async getValidadasPorMomento(
+    momento: string,
+    campamentoId?: string | null,
+  ): Promise<{ equipo_id: string; tipo: string; puntos: number }[]> {
+    const selectStr = campamentoId
+      ? 'equipo_id, puntos, cod:incidencia_codigos!incidencias_codigo_fkey(tipo), eq_camp:equipos!equipo_id!inner(campamento_id)'
+      : 'equipo_id, puntos, cod:incidencia_codigos!incidencias_codigo_fkey(tipo)'
+    let q = (supabase as any)
+      .from('incidencias')
+      .select(selectStr)
+      .eq('momento', momento)
+      .eq('estado', 'validado')
+    if (campamentoId) q = q.eq('eq_camp.campamento_id', campamentoId)
+    const { data, error } = await q
+    if (error) throw error
+    return ((data ?? []) as any[]).map((r) => ({
+      equipo_id: r.equipo_id,
+      tipo: r.cod?.tipo ?? '',
+      puntos: r.puntos ?? 0,
+    }))
+  },
+
   async getPorId(id: string): Promise<IncidenciaDetalle | null> {
     const { data, error } = await supabase
       .from('incidencias')

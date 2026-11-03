@@ -171,20 +171,65 @@ export const observacionesService = {
 
 // ── programacionRubricaService ───────────────────────────────────────────────
 export const programacionRubricaService = {
+  async getMomentosConProgramacion(campamentoId?: string | null): Promise<string[]> {
+    let q = supabase
+      .from('programacion')
+      .select('momento, criterios!inner(tipo_calculo, activo)')
+      .eq('criterios.tipo_calculo', 'rubrica')
+      .eq('criterios.activo', true)
+      .eq('estado', 'programado')
+    if (campamentoId) q = q.eq('campamento_id', campamentoId)
+    const { data, error } = await q
+    if (error) throw error
+    return [...new Set((data ?? []).map((r: any) => r.momento as string))]
+  },
+
   async getPorDia(momento: string, campamentoId?: string | null): Promise<ProgramacionConCriterio[]> {
+    // 1. Filas de programacion para este momento
     let q = supabase
       .from('programacion')
       .select('*, criterios(*)')
       .eq('momento', momento)
-      .eq('criterios.tipo_calculo', 'rubrica')
-      .eq('criterios.activo', true)
       .order('orden', { referencedTable: 'criterios' })
     if (campamentoId) q = q.eq('campamento_id', campamentoId)
     const { data, error } = await q
     if (error) throw error
-    // Filtrar registros donde criterios es null (tipo_calculo != rubrica o inactivo)
-    return (data ?? []).filter(
-      (p) => p.criterios !== null,
-    ) as unknown as ProgramacionConCriterio[]
+
+    // Filtrar rubrica (case-insensitive) y activos
+    const progs = ((data ?? []).filter(
+      (p) => p.criterios !== null &&
+             (p.criterios as any).tipo_calculo?.toLowerCase() === 'rubrica' &&
+             (p.criterios as any).activo === true,
+    )) as unknown as ProgramacionConCriterio[]
+
+    // 2. Si hay campamentoId, completar con criterios rubrica sin fila en programacion
+    if (campamentoId) {
+      const { data: ccData } = await supabase
+        .from('campamento_criterios')
+        .select('criterio_id, criterios(*)')
+        .eq('campamento_id', campamentoId)
+
+      const progCriterioIds = new Set(progs.map((p) => p.criterio_id))
+
+      for (const cc of (ccData ?? []) as any[]) {
+        const c = cc.criterios
+        if (!c || c.tipo_calculo?.toLowerCase() !== 'rubrica' || !c.activo) continue
+        if (progCriterioIds.has(cc.criterio_id)) continue
+        // Criterio rubrica del campamento sin programacion para este momento → no_programado
+        progs.push({
+          id: `noprog_${cc.criterio_id}`,
+          momento,
+          puntaje_max: 0,
+          estado: 'no_programado',
+          motivo: null,
+          criterio_id: cc.criterio_id,
+          criterios: c,
+        } as unknown as ProgramacionConCriterio)
+      }
+
+      progs.sort((a, b) => (a.criterios.orden ?? 0) - (b.criterios.orden ?? 0))
+    }
+
+    return progs
   },
 }

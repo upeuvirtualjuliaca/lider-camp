@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSessionStore } from '@/modules/auth/store'
 import { useCampamentoStore } from '@/stores/campamento'
+import { useDiasCampamento } from '@/composables/useDiasCampamento'
 import {
   incidenciasService,
   codigosService,
@@ -18,6 +19,10 @@ import { equiposService, type Equipo } from '@/modules/equipos/services/equipos.
 const session   = useSessionStore()
 const campStore = useCampamentoStore()
 const router    = useRouter()
+
+const { momentos, fechas, cargar: cargarCampamento, labelDia, detectarMomentoActual } = useDiasCampamento()
+const momentoActivo = ref<string>('')
+const momentosConProg = ref<string[]>([])
 
 // ── Estado ────────────────────────────────────────────────────────────────────
 const cargando  = ref(true)
@@ -40,13 +45,27 @@ async function cargar() {
   cargando.value = true
   error.value = ''
   try {
-    const [inc, cod, eq, bon, dem] = await Promise.all([
+    const [, inc, cod, eq, bon, dem] = await Promise.all([
+      cargarCampamento(),
       incidenciasService.getAll({ campamento_id: campStore.selectedId ?? undefined }),
       codigosService.getAll(),
       equiposService.getTodos(campStore.selectedId ?? undefined),
       bonusService.getResumen(campStore.selectedId),
       demeritorService.getResumen(campStore.selectedId),
     ])
+    const { supabase } = await import('@/lib/supabase')
+    if (campStore.selectedId) {
+      const { data: progData } = await supabase
+        .from('programacion')
+        .select('momento')
+        .eq('campamento_id', campStore.selectedId)
+        .eq('estado', 'programado')
+      momentosConProg.value = [...new Set((progData ?? []).map((r: any) => r.momento as string))]
+    }
+    const hoy = detectarMomentoActual()
+    momentoActivo.value = momentosConProg.value.includes(hoy)
+      ? hoy
+      : (momentosConProg.value[0] ?? hoy)
     lista.value     = inc
     codigos.value   = cod
     equipos.value   = eq
@@ -73,8 +92,15 @@ function tipoDe(codigo: string) {
   return codigoPorCodigo.value.get(codigo)?.tipo ?? 'demerito'
 }
 
+// Incidencias del día seleccionado
+const listaDia = computed(() => {
+  const fecha = fechas.value[momentoActivo.value]
+  if (!fecha) return lista.value
+  return lista.value.filter((inc) => inc.fecha === fecha)
+})
+
 const listaFiltrada = computed(() => {
-  return lista.value.filter((inc) => {
+  return listaDia.value.filter((inc) => {
     if (filtTab.value === 'bonus'     && tipoDe(inc.codigo) !== 'bonus')     return false
     if (filtTab.value === 'demerito'  && tipoDe(inc.codigo) !== 'demerito')  return false
     if (filtTab.value === 'pendiente' && inc.estado !== 'registrado')        return false
@@ -83,10 +109,10 @@ const listaFiltrada = computed(() => {
   })
 })
 
-// Conteos para las tabs
-const cntBonus    = computed(() => lista.value.filter(i => tipoDe(i.codigo) === 'bonus').length)
-const cntDemerito = computed(() => lista.value.filter(i => tipoDe(i.codigo) === 'demerito').length)
-const cntPendiente = computed(() => lista.value.filter(i => i.estado === 'registrado').length)
+// Conteos para las tabs (del día activo)
+const cntBonus     = computed(() => listaDia.value.filter(i => tipoDe(i.codigo) === 'bonus').length)
+const cntDemerito  = computed(() => listaDia.value.filter(i => tipoDe(i.codigo) === 'demerito').length)
+const cntPendiente = computed(() => listaDia.value.filter(i => i.estado === 'registrado').length)
 
 // Impacto real en puntaje (solo validados)
 const bonusPts    = computed(() => bonusList.value.reduce((s, b) => s + (b.bonus_codigo ?? 0), 0))
@@ -121,33 +147,26 @@ function nombreEquipo(id: string) {
         <button class="btn-ayuda" title="¿Cómo funciona?" @click="modalOpen = true">
           <i class="pi pi-question-circle" />
         </button>
-        <router-link to="/panel/incidencias/nueva" class="btn btn--primary">
+        <router-link
+          :to="`/panel/incidencias/nueva${momentoActivo && fechas[momentoActivo] ? '?fecha=' + fechas[momentoActivo] : ''}`"
+          class="btn btn--primary"
+        >
           <i class="pi pi-plus" /> Registrar
         </router-link>
       </div>
     </header>
 
-    <!-- ── Alerta admin: pendientes de validar ── -->
-    <div
-      v-if="session.rol === 'admin' && cntPendiente > 0 && !cargando"
-      class="inc-alerta"
-      @click="router.push('/panel/incidencias/bandeja')"
-    >
-      <div class="inc-alerta__left">
-        <i class="pi pi-clock" />
-        <div>
-          <strong>{{ cntPendiente }} incidencia{{ cntPendiente !== 1 ? 's' : '' }} esperan validación</strong>
-          <span>Toca aquí para revisar y aprobar o rechazar</span>
-        </div>
-      </div>
-      <i class="pi pi-angle-right" />
-    </div>
-
-    <!-- ── Bandeja (admin, sin pendientes) ── -->
-    <div v-else-if="session.rol === 'admin' && !cargando" class="inc-bandeja-link">
-      <router-link to="/panel/incidencias/bandeja" class="btn btn--ghost btn--sm">
-        <i class="pi pi-inbox" /> Bandeja de validación
-      </router-link>
+    <!-- ── Selector de días ── -->
+    <div v-if="momentos.length" class="inc-dias">
+      <button
+        v-for="m in momentos.filter(m => momentosConProg.includes(m))"
+        :key="m"
+        class="inc-dia-btn"
+        :class="{ 'inc-dia-btn--active': momentoActivo === m }"
+        @click="momentoActivo = m"
+      >
+        {{ labelDia(m) }}
+      </button>
     </div>
 
     <!-- ── Impacto en puntaje ── -->
@@ -155,8 +174,8 @@ function nombreEquipo(id: string) {
       <div class="inc-impacto__item inc-impacto__item--bonus">
         <i class="pi pi-star-fill" />
         <div>
-          <span class="inc-impacto__val">+{{ bonusPts }} pts</span>
-          <span class="inc-impacto__lbl">bonus validados</span>
+          <span class="inc-impacto__val">+50 pts</span>
+          <span class="inc-impacto__lbl">máximo por equipo</span>
         </div>
       </div>
       <div class="inc-impacto__sep" />
@@ -164,7 +183,7 @@ function nombreEquipo(id: string) {
         <i class="pi pi-exclamation-triangle" />
         <div>
           <span class="inc-impacto__val">−{{ demeritoPts }} pts</span>
-          <span class="inc-impacto__lbl">deméritos aplicados</span>
+          <span class="inc-impacto__lbl">según gravedad de la falta</span>
         </div>
       </div>
     </div>
@@ -367,6 +386,28 @@ function nombreEquipo(id: string) {
   padding: 0 1rem 2rem;
 }
 
+/* ─── Selector de días ─── */
+.inc-dias {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.inc-dia-btn {
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  min-height: 44px;
+  transition: all .15s;
+}
+.inc-dia-btn:hover { border-color: #bbf7d0; color: #15803d; }
+.inc-dia-btn--active { background: #16a34a; color: white; border-color: #16a34a; }
+
 /* ─── Header ─── */
 .inc-header {
   display: flex;
@@ -462,6 +503,7 @@ function nombreEquipo(id: string) {
 .inc-impacto__item--bonus   .inc-impacto__val { color: #16a34a; }
 .inc-impacto__item--demerito .inc-impacto__val { color: #dc2626; }
 .inc-impacto__lbl { font-size: 0.72rem; color: #6b7280; display: block; margin-top: 0.1rem; }
+.inc-impacto__max { font-size: 0.72rem; font-weight: 500; color: #9ca3af; }
 .inc-impacto__sep {
   width: 1px;
   height: 40px;

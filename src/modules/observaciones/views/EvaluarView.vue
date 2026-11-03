@@ -35,24 +35,26 @@ interface FilaEstado {
 }
 
 // ── Constantes ────────────────────────────────────────────────────────────────
-const PUNTAJES = [0, 25, 50, 75, 100]
-
 const { momentos, fechas, cargar: cargarCampamento, labelDia, detectarMomentoActual } = useDiasCampamento()
 
-const DESCRIPTORES_RUBRICA: Record<number, string> = {
-  0:   'No cumple / No presente',
-  25:  'Deficiente — incumplimiento grave',
-  50:  'Regular — cumplimiento parcial',
-  75:  'Bueno — cumple lo esencial',
-  100: 'Excelente — cumplimiento total',
+// Los 5 niveles de rúbrica (0 % → 100 % del puntaje_max del criterio)
+const SCORE_NIVELES = [
+  { idle: 'score-btn--0-idle',   active: 'score-btn--0-act',   label: 'Nulo',  descriptor: 'No cumple / No presente'         },
+  { idle: 'score-btn--25-idle',  active: 'score-btn--25-act',  label: 'Def.',  descriptor: 'Deficiente — incumplimiento grave' },
+  { idle: 'score-btn--50-idle',  active: 'score-btn--50-act',  label: 'Reg.',  descriptor: 'Regular — cumplimiento parcial'   },
+  { idle: 'score-btn--75-idle',  active: 'score-btn--75-act',  label: 'Bien',  descriptor: 'Bueno — cumple lo esencial'       },
+  { idle: 'score-btn--100-idle', active: 'score-btn--100-act', label: '¡Ok!',  descriptor: 'Excelente — cumplimiento total'   },
+] as const
+
+/** Devuelve los 5 valores de puntaje para un criterio dado su puntaje_max */
+function puntajesPara(max: number): number[] {
+  return [0, max * 0.25, max * 0.5, max * 0.75, max]
 }
 
-const SCORE_COLOR: Record<number, { idle: string; active: string; label: string }> = {
-  0:   { idle: 'score-btn--0-idle',   active: 'score-btn--0-act',   label: 'Nulo' },
-  25:  { idle: 'score-btn--25-idle',  active: 'score-btn--25-act',  label: 'Def.' },
-  50:  { idle: 'score-btn--50-idle',  active: 'score-btn--50-act',  label: 'Reg.' },
-  75:  { idle: 'score-btn--75-idle',  active: 'score-btn--75-act',  label: 'Bien' },
-  100: { idle: 'score-btn--100-idle', active: 'score-btn--100-act', label: '¡Ok!' },
+/** Índice de nivel (0-4) de un puntaje respecto al puntaje_max. -1 si no coincide. */
+function nivelDe(puntaje: number | null | undefined, max: number): number {
+  if (puntaje === null || puntaje === undefined) return -1
+  return puntajesPara(max).indexOf(puntaje)
 }
 
 // ── Estado global ─────────────────────────────────────────────────────────────
@@ -61,8 +63,9 @@ const campStore = useCampamentoStore()
 const cargando  = ref(true)
 const error     = ref('')
 
-const dias             = ref<DiasEvaluacion[]>([])
-const momentoActivo    = ref<string>('')
+const dias                    = ref<DiasEvaluacion[]>([])
+const momentoActivo           = ref<string>('')
+const momentosConEvaluacion   = ref<string[]>([])
 const equipos          = ref<Equipo[]>([])
 const programacionDia  = ref<ProgramacionConCriterio[]>([])
 const puntajesDia      = ref<PuntajeEquipoDia[]>([])
@@ -102,14 +105,18 @@ async function cargar() {
   obsByEquipo.value   = new Map()
   obsByCriterio.value = new Map()
   try {
-    const [, diasData, equiposData] = await Promise.all([
+    const [, diasData, equiposData, momentosData] = await Promise.all([
       cargarCampamento(),
       campStore.selectedId ? diasService.getTodos(campStore.selectedId) : Promise.resolve([]),
       equiposService.getTodos(campStore.selectedId ?? undefined),
+      programacionRubricaService.getMomentosConProgramacion(campStore.selectedId),
     ])
-    momentoActivo.value = detectarMomentoActual()
+    momentosConEvaluacion.value = momentosData
     dias.value    = diasData
     equipos.value = equiposData.filter((e) => e.activo)
+    momentoActivo.value = momentosData.includes(detectarMomentoActual())
+      ? detectarMomentoActual()
+      : (momentosData[0] ?? detectarMomentoActual())
     await cargarProgramacionDia()
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Error al cargar datos'
@@ -337,7 +344,7 @@ function pctBar(c: number, t: number) {
       <div class="ev-days-wrap">
         <div class="ev-days">
           <button
-            v-for="m in momentos"
+            v-for="m in momentos.filter(m => momentosConEvaluacion.includes(m))"
             :key="m"
             class="ev-day"
             :class="{
@@ -425,13 +432,13 @@ function pctBar(c: number, t: number) {
             <template v-else>
               <div class="ev-scores">
                 <button
-                  v-for="pts in PUNTAJES"
+                  v-for="(pts, idx) in puntajesPara(prog.puntaje_max)"
                   :key="pts"
                   class="ev-score-btn"
                   :class="[
                     filasEquipo.get(prog.id)?.puntaje === pts
-                      ? SCORE_COLOR[pts]!.active
-                      : SCORE_COLOR[pts]!.idle,
+                      ? SCORE_NIVELES[idx]!.active
+                      : SCORE_NIVELES[idx]!.idle,
                     { 'ev-score-btn--locked': diaCerrado },
                   ]"
                   :disabled="diaCerrado"
@@ -441,7 +448,7 @@ function pctBar(c: number, t: number) {
                   <span
                     v-if="filasEquipo.get(prog.id)?.puntaje === pts"
                     class="ev-score-label"
-                  >{{ SCORE_COLOR[pts]!.label }}</span>
+                  >{{ SCORE_NIVELES[idx]!.label }}</span>
                 </button>
               </div>
 
@@ -451,7 +458,7 @@ function pctBar(c: number, t: number) {
                 class="ev-descriptor"
               >
                 <i class="pi pi-info-circle" />
-                {{ DESCRIPTORES_RUBRICA[filasEquipo.get(prog.id)!.puntaje!] }}
+                {{ SCORE_NIVELES[nivelDe(filasEquipo.get(prog.id)?.puntaje, prog.puntaje_max)]?.descriptor }}
               </div>
 
               <!-- Comentario -->
@@ -548,13 +555,13 @@ function pctBar(c: number, t: number) {
 
             <div class="ev-scores">
               <button
-                v-for="pts in PUNTAJES"
+                v-for="(pts, idx) in puntajesPara(criterioSeleccionado!.puntaje_max)"
                 :key="pts"
                 class="ev-score-btn"
                 :class="[
                   filasCriterio.get(equipo.id)?.puntaje === pts
-                    ? SCORE_COLOR[pts]!.active
-                    : SCORE_COLOR[pts]!.idle,
+                    ? SCORE_NIVELES[idx]!.active
+                    : SCORE_NIVELES[idx]!.idle,
                   { 'ev-score-btn--locked': diaCerrado },
                 ]"
                 :disabled="diaCerrado"
@@ -562,7 +569,7 @@ function pctBar(c: number, t: number) {
               >
                 <span class="ev-score-num">{{ pts }}</span>
                 <span v-if="filasCriterio.get(equipo.id)?.puntaje === pts" class="ev-score-label">
-                  {{ SCORE_COLOR[pts]!.label }}
+                  {{ SCORE_NIVELES[idx]!.label }}
                 </span>
               </button>
             </div>
@@ -572,7 +579,7 @@ function pctBar(c: number, t: number) {
               class="ev-descriptor"
             >
               <i class="pi pi-info-circle" />
-              {{ DESCRIPTORES_RUBRICA[filasCriterio.get(equipo.id)!.puntaje!] }}
+              {{ SCORE_NIVELES[nivelDe(filasCriterio.get(equipo.id)?.puntaje, criterioSeleccionado!.puntaje_max)]?.descriptor }}
             </div>
 
             <div class="ev-comment-wrap">
@@ -764,12 +771,12 @@ function pctBar(c: number, t: number) {
         </div>
         <div class="ev-rubrica-grid">
           <div
-            v-for="pts in PUNTAJES"
-            :key="pts"
+            v-for="(nivel, idx) in SCORE_NIVELES"
+            :key="idx"
             class="ev-rubrica-row"
           >
-            <span class="ev-rubrica-pts" :class="SCORE_COLOR[pts]!.active">{{ pts }}</span>
-            <span class="ev-rubrica-desc">{{ DESCRIPTORES_RUBRICA[pts] }}</span>
+            <span class="ev-rubrica-pts" :class="nivel.active">{{ nivel.label }}</span>
+            <span class="ev-rubrica-desc">{{ nivel.descriptor }}</span>
           </div>
         </div>
       </template>
