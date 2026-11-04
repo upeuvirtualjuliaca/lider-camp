@@ -30,6 +30,11 @@ const guardando = ref(false)
 const errorGuardado = ref('')
 
 const momentoActivo = ref<string>('')
+const momentosConProg = ref<Set<string>>(new Set())
+
+const momentosFiltrados = computed(() =>
+  momentos.value.filter((m) => momentosConProg.value.has(m)),
+)
 
 const actividades = ref<ActividadConProgramacion[]>([])
 const criteriosAsistencia = ref<Tables<'criterios'>[]>([])
@@ -203,7 +208,11 @@ async function cargar() {
   try {
     await cargarCampamento()
     momentoActivo.value = detectarMomentoActual()
-    await Promise.all([cargarActividades(), cargarCriteriosAsistencia(), cargarCriteriosGuardados(), cargarTiposCalculo()])
+    await Promise.all([cargarActividades(), cargarCriteriosAsistencia(), cargarCriteriosGuardados(), cargarTiposCalculo(), cargarMomentosConProgramacion()])
+    // Si el momento activo no tiene programación, usar el primero que sí tenga
+    if (!momentosConProg.value.has(momentoActivo.value)) {
+      momentoActivo.value = momentosFiltrados.value[0] ?? momentoActivo.value
+    }
     await cargarProgramacionDia(momentoActivo.value)
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Error al cargar datos'
@@ -271,6 +280,18 @@ async function cargarProgramacionDia(momento: string) {
     puntaje_max: r.puntaje_max,
     tipo_calculo: r.criterios?.tipo_calculo ?? '',
   }))
+}
+
+async function cargarMomentosConProgramacion() {
+  const campId = campStore.selectedId!
+  const { data, error: err } = await supabase
+    .from('programacion')
+    .select('momento')
+    .eq('campamento_id', campId)
+    .eq('estado', 'programado')
+    .gt('puntaje_max', 0)
+  if (err) return
+  momentosConProg.value = new Set((data ?? []).map((r) => r.momento))
 }
 
 async function seleccionarMomento(m: string) {
@@ -471,7 +492,7 @@ async function confirmarCancelar() {
       <!-- ── Selector de días ──────────────────────────────────────────────── -->
       <div class="flex gap-2 flex-wrap mb-2">
         <button
-          v-for="m in momentos"
+          v-for="m in momentosFiltrados"
           :key="m"
           class="px-3 py-2 rounded-full text-sm font-semibold border min-h-[44px] transition"
           :class="momentoActivo === m

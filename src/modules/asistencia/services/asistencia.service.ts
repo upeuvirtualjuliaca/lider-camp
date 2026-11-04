@@ -193,11 +193,13 @@ export const asistenciaService = {
 
 // ── evalRegistrosService ─────────────────────────────────────────────────────
 export const evalRegistrosService = {
-  async getPorActividad(actividadId: string): Promise<EvalRegistro[]> {
-    const { data, error } = await supabase
+  async getPorActividad(actividadId: string, evaluador_id?: string): Promise<EvalRegistro[]> {
+    let q = supabase
       .from('actividad_eval_registros')
       .select('*')
       .eq('actividad_id', actividadId)
+    if (evaluador_id) q = q.eq('evaluador_id', evaluador_id)
+    const { data, error } = await q
     if (error) throw error
     return data ?? []
   },
@@ -205,7 +207,7 @@ export const evalRegistrosService = {
   async upsert(datos: TablesInsert<'actividad_eval_registros'>): Promise<EvalRegistro> {
     const { data, error } = await supabase
       .from('actividad_eval_registros')
-      .upsert(datos, { onConflict: 'criterio_eval_id,equipo_id' })
+      .upsert(datos, { onConflict: 'criterio_eval_id,equipo_id,evaluador_id' })
       .select()
       .single()
     if (error) throw error

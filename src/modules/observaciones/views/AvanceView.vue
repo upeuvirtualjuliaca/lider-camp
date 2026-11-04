@@ -184,10 +184,19 @@ async function cargarDatosDia() {
       actFiltradas.map(async (a) => {
         try {
           const registros = await evalRegistrosService.getPorActividad(a.id)
-          // Sumar puntaje por equipo
-          const totales: Record<string, number> = {}
+          // Agrupar por (criterio, equipo) y promediar entre evaluadores
+          const byKey = new Map<string, number[]>()
           for (const r of registros) {
-            totales[r.equipo_id] = (totales[r.equipo_id] ?? 0) + (r.puntaje ?? 0)
+            const key = `${r.criterio_eval_id}|${r.equipo_id}`
+            if (!byKey.has(key)) byKey.set(key, [])
+            byKey.get(key)!.push(Number(r.puntaje))
+          }
+          // Sumar promedios por equipo
+          const totales: Record<string, number> = {}
+          for (const [key, puntajes] of byKey) {
+            const equipoId = key.split('|')[1]
+            const avg = puntajes.reduce((a, b) => a + b, 0) / puntajes.length
+            totales[equipoId] = (totales[equipoId] ?? 0) + avg
           }
           for (const [equipoId, total] of Object.entries(totales)) {
             newActMap.set(`${a.id}|${equipoId}`, total)
@@ -224,8 +233,15 @@ async function cargarObservacionesDetalle() {
     .map(async (prog) => {
       try {
         const obs = await observacionesService.getPorCriterioYDia(prog.id)
+        // Agrupar por equipo y promediar (puede haber varios evaluadores por equipo)
+        const byEquipo = new Map<string, number[]>()
         for (const o of obs) {
-          obsMap.value.set(`${prog.id}|${o.equipo_id}`, o.puntaje)
+          if (!byEquipo.has(o.equipo_id)) byEquipo.set(o.equipo_id, [])
+          byEquipo.get(o.equipo_id)!.push(o.puntaje)
+        }
+        for (const [equipo_id, puntajes] of byEquipo) {
+          const avg = Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length)
+          obsMap.value.set(`${prog.id}|${equipo_id}`, avg)
         }
       } catch {
         // silencioso por criterio

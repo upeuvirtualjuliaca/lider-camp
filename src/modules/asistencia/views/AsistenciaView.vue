@@ -250,7 +250,7 @@ async function seleccionarActividad(act: ActividadConProgramacion) {
 
   criteriosActividad.value = await criteriosEvalService.getPorActividad(act.id)
   if (criteriosActividad.value.length) {
-    const records = await evalRegistrosService.getPorActividad(act.id)
+    const records = await evalRegistrosService.getPorActividad(act.id, session.user!.id)
 
     // criteriosPorEquipo: equipo_id → FilaCriterio[]
     const mapEq = new Map<string, FilaCriterio[]>()

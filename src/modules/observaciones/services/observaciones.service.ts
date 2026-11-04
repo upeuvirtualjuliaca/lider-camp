@@ -120,11 +120,13 @@ export const observacionesService = {
   async getPorEquipoYDia(
     equipo_id: string,
     momento: string,
+    evaluador_id: string,
   ): Promise<ObservacionConDetalle[]> {
     const { data, error } = await supabase
       .from('observaciones')
       .select('*, programacion(*, criterios(*))')
       .eq('equipo_id', equipo_id)
+      .eq('evaluador_id', evaluador_id)
       .eq('programacion.momento', momento)
     if (error) throw error
     // Filtrar nulls (filas donde el join no coincide con momento)
@@ -133,11 +135,16 @@ export const observacionesService = {
     ) as unknown as ObservacionConDetalle[]
   },
 
-  async getPorCriterioYDia(programacion_id: string): Promise<ObservacionConEquipo[]> {
-    const { data, error } = await supabase
+  async getPorCriterioYDia(
+    programacion_id: string,
+    evaluador_id?: string,
+  ): Promise<ObservacionConEquipo[]> {
+    let q = supabase
       .from('observaciones')
       .select('*, equipos(*)')
       .eq('programacion_id', programacion_id)
+    if (evaluador_id) q = q.eq('evaluador_id', evaluador_id)
+    const { data, error } = await q
     if (error) throw error
     return (data ?? []) as unknown as ObservacionConEquipo[]
   },
@@ -145,7 +152,7 @@ export const observacionesService = {
   async upsert(datos: UpsertObservacion): Promise<Observacion> {
     const { data, error } = await supabase
       .from('observaciones')
-      .upsert(datos, { onConflict: 'equipo_id,programacion_id' })
+      .upsert(datos, { onConflict: 'equipo_id,programacion_id,evaluador_id' })
       .select()
       .single()
     if (error) throw error

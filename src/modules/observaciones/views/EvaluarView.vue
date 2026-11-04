@@ -236,7 +236,7 @@ async function seleccionarEquipo(equipo: Equipo) {
   filasEquipo.value  = new Map()
 
   const { data } = await supabase_safe(() =>
-    observacionesService.getPorEquipoYDia(equipo.id, momentoActivo.value),
+    observacionesService.getPorEquipoYDia(equipo.id, momentoActivo.value, session.user!.id),
   )
   if (!data) return
   for (const obs of data) obsByEquipo.value.set(obs.programacion.id, obs)
@@ -259,7 +259,7 @@ async function seleccionarCriterio(prog: ProgramacionConCriterio) {
   filasCriterio.value  = new Map()
 
   const { data } = await supabase_safe(() =>
-    observacionesService.getPorCriterioYDia(prog.id),
+    observacionesService.getPorCriterioYDia(prog.id, session.user!.id),
   )
   if (!data) return
   for (const obs of data) obsByCriterio.value.set(obs.equipo_id, obs)

@@ -114,8 +114,17 @@ async function cargarDatosDia(momento: string) {
     await Promise.all(
       actFiltradas.map(async (a) => {
         const regs = await evalRegistrosService.getPorActividad(a.id)
+        // Promediar entre evaluadores por (criterio, equipo), luego sumar criterios
+        const byKey = new Map<string, number[]>()
         for (const r of regs) {
-          actPts[r.equipo_id] = (actPts[r.equipo_id] ?? 0) + (r.puntaje ?? 0)
+          const key = `${r.criterio_eval_id}|${r.equipo_id}`
+          if (!byKey.has(key)) byKey.set(key, [])
+          byKey.get(key)!.push(Number(r.puntaje))
+        }
+        for (const [key, puntajes] of byKey) {
+          const equipoId = key.split('|')[1]
+          const avg = puntajes.reduce((a, b) => a + b, 0) / puntajes.length
+          actPts[equipoId] = (actPts[equipoId] ?? 0) + avg
         }
       }),
     )
