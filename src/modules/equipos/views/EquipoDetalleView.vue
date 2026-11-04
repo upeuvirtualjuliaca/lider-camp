@@ -198,12 +198,9 @@ onMounted(cargar)
       <Column header="#" style="width:3rem">
         <template #body="{ index }">{{ (index as number) + 1 }}</template>
       </Column>
-      <Column header="Apellidos y nombres">
-        <template #body="{ data }">
-          {{ (data as Integrante).apellidos }}, {{ (data as Integrante).nombres }}
-        </template>
-      </Column>
       <Column field="codigo_universitario" header="Código" class="col-codigo" />
+      <Column field="apellidos"            header="Apellidos" />
+      <Column field="nombres"              header="Nombres" />
       <Column field="fecha_inscripcion"    header="F. Inscripción" class="col-fecha" />
       <Column header="Categoría" style="width:7rem" class="col-categoria">
         <template #body="{ data }">

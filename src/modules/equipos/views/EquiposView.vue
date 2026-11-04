@@ -19,6 +19,10 @@ const dialogVisible = ref(false)
 const equipoEditando = ref<Equipo | null>(null)
 const busqueda = ref('')
 
+const totalParticipantes = computed(() =>
+  equipos.value.reduce((sum, eq) => sum + (inscripciones.value.get(eq.id)?.nomina ?? 0), 0),
+)
+
 const equiposFiltrados = computed(() => {
   const q = busqueda.value.toLowerCase().trim()
   if (!q) return equipos.value
@@ -90,6 +94,9 @@ watch(() => campStore.selectedId, cargar)
       <h2 class="flex items-center gap-2 text-xl font-bold text-gray-800 m-0">
         <i class="pi pi-users text-green-600" />
         Equipos
+        <span class="text-sm font-semibold bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full ml-1">
+          {{ totalParticipantes }} participantes
+        </span>
       </h2>
       <button
         v-if="session.esAdmin"
