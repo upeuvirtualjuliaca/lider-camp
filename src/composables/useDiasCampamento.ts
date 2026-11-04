@@ -45,7 +45,8 @@ export function useDiasCampamento() {
   }
 
   function detectarMomentoActual(): string {
-    const hoy = new Date().toISOString().slice(0, 10)
+    const d = new Date()
+    const hoy = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
     return dias.value.find((d) => d.fecha === hoy)?.codigo ?? (momentos.value[0] ?? '')
   }
 

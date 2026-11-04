@@ -467,6 +467,7 @@ async function confirmarCancelar() {
     </div>
 
     <template v-else>
+
       <!-- ── Selector de días ──────────────────────────────────────────────── -->
       <div class="flex gap-2 flex-wrap mb-2">
         <button
@@ -623,7 +624,8 @@ async function confirmarCancelar() {
       <p v-else class="text-center text-gray-500 text-sm py-8">
         No hay actividades para este día. Usa "Nueva actividad" para agregar.
       </p>
-    </template>
+
+    </template><!-- /v-else general -->
 
     <!-- ── Modal crear / editar ──────────────────────────────────────────────── -->
     <Teleport to="body">
@@ -1023,3 +1025,4 @@ async function confirmarCancelar() {
 
   </div>
 </template>
+

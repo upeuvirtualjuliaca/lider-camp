@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import Textarea from 'primevue/textarea'
 import { useDiasCampamento } from '@/composables/useDiasCampamento'
@@ -36,6 +36,59 @@ interface FilaEstado {
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const { momentos, fechas, cargar: cargarCampamento, labelDia, detectarMomentoActual } = useDiasCampamento()
+
+// Solo mostrar días cuya fecha ya llegó (≤ hoy)
+const hoy = computed(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })
+
+// Días con programación ya disponibles (fecha ≤ hoy)
+const momentosDisponibles = computed(() =>
+  momentos.value.filter(m =>
+    momentosConEvaluacion.value.includes(m) && fechas.value[m] <= hoy.value
+  )
+)
+
+// Días que se muestran en el selector:
+// - Admin: todos los días con criterios (puede navegar aunque aún no lleguen)
+// - Evaluador: solo días ya llegados
+const momentosSelector = computed<string[]>(() =>
+  session.esAdmin
+    ? momentos.value.filter(m => momentosConEvaluacion.value.includes(m))
+    : momentosDisponibles.value
+)
+
+// Días con programación aún por llegar (fecha > hoy)
+const momentosFuturos = computed(() =>
+  momentos.value.filter(m => momentosConEvaluacion.value.includes(m) && fechas.value[m] > hoy.value)
+)
+
+// Próximo día a evaluar
+const proximoMomento = computed(() => momentosFuturos.value[0] ?? null)
+
+// Countdown al próximo día
+const countdown = ref({ dias: 0, horas: 0, minutos: 0, segundos: 0 })
+
+function calcularCountdown() {
+  if (!proximoMomento.value) return
+  const fechaProx = fechas.value[proximoMomento.value]
+  if (!fechaProx) return
+  const target  = new Date(fechaProx + 'T00:00:00')
+  const diff    = target.getTime() - Date.now()
+  if (diff <= 0) { cargar(); return }
+  const s = Math.floor(diff / 1000)
+  countdown.value = {
+    dias:     Math.floor(s / 86400),
+    horas:    Math.floor((s % 86400) / 3600),
+    minutos:  Math.floor((s % 3600) / 60),
+    segundos: s % 60,
+  }
+}
+
+let cdTimer: ReturnType<typeof setInterval> | null = null
+watch(proximoMomento, (val) => {
+  if (cdTimer) { clearInterval(cdTimer); cdTimer = null }
+  if (val) { calcularCountdown(); cdTimer = setInterval(calcularCountdown, 1000) }
+}, { immediate: true })
+onUnmounted(() => { if (cdTimer) clearInterval(cdTimer) })
 
 // Los 5 niveles de rúbrica (0 % → 100 % del puntaje_max del criterio)
 const SCORE_NIVELES = [
@@ -114,10 +167,15 @@ async function cargar() {
     momentosConEvaluacion.value = momentosData
     dias.value    = diasData
     equipos.value = equiposData.filter((e) => e.activo)
-    momentoActivo.value = momentosData.includes(detectarMomentoActual())
-      ? detectarMomentoActual()
-      : (momentosData[0] ?? detectarMomentoActual())
-    await cargarProgramacionDia()
+    const hoyVal    = hoy.value
+    const hoyMomento = momentosData.find(m => fechas.value[m] === hoyVal)
+    if (hoyMomento) {
+      momentoActivo.value = hoyMomento
+    } else {
+      const pasados = momentosData.filter(m => fechas.value[m] && fechas.value[m] < hoyVal)
+      momentoActivo.value = pasados[pasados.length - 1] ?? ''
+    }
+    if (momentoActivo.value) await cargarProgramacionDia()
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Error al cargar datos'
   } finally {
@@ -340,11 +398,73 @@ function pctBar(c: number, t: number) {
 
     <template v-else>
 
+      <!-- ══════════════════════════════════════════
+           SIN DÍAS DISPONIBLES AÚN — pantalla de espera
+      ══════════════════════════════════════════ -->
+      <div v-if="momentosDisponibles.length === 0 && !session.esAdmin" class="ev-espera">
+
+        <!-- Icono animado -->
+        <div class="ev-espera__icon-wrap">
+          <span class="ev-espera__icon">⛺</span>
+        </div>
+
+        <!-- Título -->
+        <div class="ev-espera__copy">
+          <h2 class="ev-espera__titulo">La evaluación comenzará pronto</h2>
+          <p v-if="proximoMomento" class="ev-espera__sub">
+            Próximo día de evaluación
+          </p>
+          <p v-if="proximoMomento" class="ev-espera__next-day">
+            {{ labelDia(proximoMomento) }}
+          </p>
+        </div>
+
+        <!-- Countdown -->
+        <div v-if="proximoMomento" class="ev-espera__countdown">
+          <div class="ev-cd-bloque">
+            <span class="ev-cd-num">{{ String(countdown.dias).padStart(2,'0') }}</span>
+            <span class="ev-cd-label">días</span>
+          </div>
+          <span class="ev-cd-sep">:</span>
+          <div class="ev-cd-bloque">
+            <span class="ev-cd-num">{{ String(countdown.horas).padStart(2,'0') }}</span>
+            <span class="ev-cd-label">horas</span>
+          </div>
+          <span class="ev-cd-sep">:</span>
+          <div class="ev-cd-bloque">
+            <span class="ev-cd-num">{{ String(countdown.minutos).padStart(2,'0') }}</span>
+            <span class="ev-cd-label">min</span>
+          </div>
+          <span class="ev-cd-sep">:</span>
+          <div class="ev-cd-bloque ev-cd-seg">
+            <span class="ev-cd-num">{{ String(countdown.segundos).padStart(2,'0') }}</span>
+            <span class="ev-cd-label">seg</span>
+          </div>
+        </div>
+
+        <!-- Días futuros -->
+        <div v-if="momentosFuturos.length" class="ev-espera__dias">
+          <p class="ev-espera__dias-label">Días programados</p>
+          <div class="ev-espera__dias-row">
+            <span
+              v-for="m in momentosFuturos"
+              :key="m"
+              class="ev-espera__dia-pill"
+              :class="{ 'ev-espera__dia-pill--next': m === proximoMomento }"
+            >
+              <i v-if="m === proximoMomento" class="pi pi-clock" style="font-size:0.65rem;" />
+              {{ labelDia(m) }}
+            </span>
+          </div>
+        </div>
+
+      </div>
+
       <!-- ── Selector de días ──────────────────────────────────────── -->
-      <div class="ev-days-wrap">
+      <div v-else class="ev-days-wrap">
         <div class="ev-days">
           <button
-            v-for="m in momentos.filter(m => momentosConEvaluacion.includes(m))"
+            v-for="m in momentosSelector"
             :key="m"
             class="ev-day"
             :class="{
@@ -354,6 +474,7 @@ function pctBar(c: number, t: number) {
             @click="seleccionarMomento(m)"
           >
             <span class="ev-day__label">{{ labelDia(m) }}</span>
+            <span v-if="fechas[m] === hoy" class="ev-day__hoy">Hoy</span>
             <span
               v-if="dias.find((d) => d.momento === m)?.cerrado"
               class="ev-day__lock"
@@ -364,8 +485,19 @@ function pctBar(c: number, t: number) {
         </div>
       </div>
 
+      <!-- Hint admin: ningún día seleccionado -->
+      <div v-if="session.esAdmin && momentoActivo === ''" class="ev-admin-hint">
+        <div class="ev-admin-hint__card">
+          <div class="ev-admin-hint__icon-wrap">
+            <i class="pi pi-calendar-clock ev-admin-hint__icon" />
+          </div>
+          <h3 class="ev-admin-hint__title">Selecciona un día</h3>
+          <p class="ev-admin-hint__text">Elige uno de los días que aparecen arriba para ver y registrar la evaluación.</p>
+        </div>
+      </div>
+
       <!-- Banner día cerrado -->
-      <div v-if="diaCerrado" class="ev-banner-locked">
+      <div v-if="momentoActivo !== '' && diaCerrado" class="ev-banner-locked">
         <i class="pi pi-lock" />
         <span>Día cerrado — solo lectura</span>
       </div>
@@ -373,7 +505,7 @@ function pctBar(c: number, t: number) {
       <!-- ══════════════════════════════════════════
            VISTA: Detalle por equipo
       ══════════════════════════════════════════ -->
-      <template v-if="equipoSeleccionado">
+      <template v-if="momentoActivo !== '' && equipoSeleccionado">
         <!-- Header equipo -->
         <div class="ev-detail-header">
           <button class="ev-back" @click="equipoSeleccionado = null">
@@ -496,7 +628,7 @@ function pctBar(c: number, t: number) {
       <!-- ══════════════════════════════════════════
            VISTA: Liderazgo por criterio (todos los equipos)
       ══════════════════════════════════════════ -->
-      <template v-else-if="modoLiderazgoCriterio && programacionLiderazgo">
+      <template v-else-if="momentoActivo !== '' && modoLiderazgoCriterio && programacionLiderazgo">
         <div class="ev-detail-header">
           <button class="ev-back" @click="modoLiderazgoCriterio = false">
             <i class="pi pi-arrow-left" />
@@ -529,7 +661,7 @@ function pctBar(c: number, t: number) {
       <!-- ══════════════════════════════════════════
            VISTA: Detalle por criterio (todos los equipos)
       ══════════════════════════════════════════ -->
-      <template v-else-if="criterioSeleccionado">
+      <template v-else-if="momentoActivo !== '' && criterioSeleccionado">
         <div class="ev-detail-header">
           <button class="ev-back" @click="criterioSeleccionado = null">
             <i class="pi pi-arrow-left" />
@@ -606,7 +738,7 @@ function pctBar(c: number, t: number) {
       <!-- ══════════════════════════════════════════
            VISTA: Lista principal (tabs)
       ══════════════════════════════════════════ -->
-      <template v-else>
+      <template v-else-if="momentoActivo !== ''">
 
         <!-- Tabs custom -->
         <div class="ev-tabs">
@@ -830,6 +962,53 @@ function pctBar(c: number, t: number) {
 .ev-error__icon { font-size: 2rem; }
 .ev-error p { font-size: 0.9rem; }
 
+/* ── Hint admin sin día seleccionado ── */
+.ev-admin-hint {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+.ev-admin-hint__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1.5px solid #bbf7d0;
+  border-radius: 20px;
+  padding: 2rem 2rem;
+  text-align: center;
+  max-width: 320px;
+  width: 100%;
+  box-shadow: 0 4px 16px rgba(22,163,74,0.08);
+}
+.ev-admin-hint__icon-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #dcfce7;
+  border: 2px solid #86efac;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ev-admin-hint__icon {
+  font-size: 1.6rem;
+  color: #16a34a;
+}
+.ev-admin-hint__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #15803d;
+  margin: 0;
+}
+.ev-admin-hint__text {
+  font-size: 0.85rem;
+  color: #4b5563;
+  margin: 0;
+  line-height: 1.5;
+}
+
 /* ── Banner cerrado ── */
 .ev-banner-locked {
   display: flex;
@@ -849,44 +1028,235 @@ function pctBar(c: number, t: number) {
    SELECTOR DE DÍAS
 ═══════════════════════════════════════════════════════════ */
 .ev-days-wrap {
-  overflow-x: auto;
-  padding: 0.75rem 1rem;
-  scrollbar-width: none;
+  padding: 0.75rem 1rem 0.5rem;
 }
-.ev-days-wrap::-webkit-scrollbar { display: none; }
 
 .ev-days {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  width: max-content;
+  justify-content: center;
 }
 
 .ev-day {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.55rem 1.2rem;
-  border-radius: 999px;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.6rem 1.1rem;
+  border-radius: 14px;
   border: 2px solid #e2e8f0;
   background: white;
   font-size: 0.88rem;
   font-weight: 600;
   color: #64748b;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.18s;
   white-space: nowrap;
-  min-height: 42px;
+  min-height: 52px;
+  min-width: 80px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
 }
-.ev-day:hover { border-color: #16a34a; color: #15803d; }
+.ev-day:hover {
+  border-color: #16a34a;
+  color: #15803d;
+  background: #f0fdf4;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(22,163,74,.12);
+}
 .ev-day--active {
   border-color: #16a34a;
-  background: #f0fdf4;
-  color: #15803d;
-  box-shadow: 0 0 0 3px #bbf7d060;
+  background: #16a34a;
+  color: white;
+  box-shadow: 0 4px 14px rgba(22,163,74,.35);
+  transform: translateY(-1px);
 }
-.ev-day--locked { opacity: 0.65; }
+.ev-day--active .ev-day__label { color: white; }
+.ev-day--active .ev-day__hoy   { background: rgba(255,255,255,.25); color: white; }
+.ev-day--locked { opacity: 0.55; }
+/* ══════════════════════════════════════════════════════════
+   PANTALLA DE ESPERA — minimalista
+══════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════
+   Pantalla de espera — evaluador
+════════════════════════════════════════ */
+.ev-espera {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.75rem;
+  padding: 3rem 1.25rem 4rem;
+  min-height: 72vh;
+  text-align: center;
+}
+
+/* Icono flotante */
+.ev-espera__icon-wrap {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  border: 2px solid #bbf7d0;
+  box-shadow: 0 8px 24px rgba(22,163,74,0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: ev-float 3s ease-in-out infinite;
+}
+.ev-espera__icon {
+  font-size: 2.75rem;
+  line-height: 1;
+}
+
+/* Texto */
+.ev-espera__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+.ev-espera__titulo {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.ev-espera__sub {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.ev-espera__next-day {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #16a34a;
+  margin: 0;
+}
+
+/* Countdown card */
+.ev-espera__countdown {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1.5px solid #bbf7d0;
+  border-radius: 22px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 4px 20px rgba(22,163,74,0.1);
+}
+.ev-cd-bloque {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 3rem;
+}
+.ev-cd-num {
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+.ev-cd-seg .ev-cd-num {
+  color: #16a34a;
+}
+.ev-cd-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #94a3b8;
+}
+.ev-cd-sep {
+  font-size: 1.75rem;
+  font-weight: 300;
+  color: #86efac;
+  margin-bottom: 1.2rem;
+  user-select: none;
+  animation: ev-blink 1s step-end infinite;
+}
+
+/* Días programados */
+.ev-espera__dias {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+.ev-espera__dias-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #cbd5e1;
+  margin: 0;
+}
+.ev-espera__dias-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: center;
+}
+.ev-espera__dia-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  border: 1.5px solid #e2e8f0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.ev-espera__dia-pill--next {
+  color: #15803d;
+  background: #dcfce7;
+  border-color: #86efac;
+  font-weight: 700;
+  box-shadow: 0 2px 10px rgba(22,163,74,0.18);
+}
+
+/* Animaciones */
+@keyframes ev-float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-7px); }
+}
+@keyframes ev-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* Responsive */
+@media (min-width: 480px) {
+  .ev-espera__titulo  { font-size: 1.5rem; }
+  .ev-cd-num          { font-size: 2.9rem; }
+  .ev-cd-bloque       { min-width: 3.75rem; }
+  .ev-espera__icon-wrap { width: 100px; height: 100px; }
+  .ev-espera__icon    { font-size: 3.25rem; }
+}
+@media (min-width: 768px) {
+  .ev-espera { max-width: 460px; margin: 0 auto; }
+}
+
 .ev-day__label { font-weight: 700; }
-.ev-day__lock { font-size: 0.7rem; color: #b45309; }
+.ev-day__lock  { font-size: 0.7rem; color: #b45309; }
+.ev-day__hoy {
+  font-size: 0.6rem; font-weight: 800; text-transform: uppercase;
+  background: #16a34a; color: white;
+  padding: 0.05rem 0.4rem; border-radius: 20px;
+  letter-spacing: .04em;
+}
 
 /* ═══════════════════════════════════════════════════════════
    HEADER DETALLE (volver atrás)

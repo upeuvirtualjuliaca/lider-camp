@@ -47,7 +47,7 @@ const sections: NavSection[] = [
     items: [
       { label: 'Equipos',          icon: 'pi pi-flag',          to: '/panel/equipos',       roles: ['admin', 'evaluador'] },
       { label: 'Tipos de cálculo', icon: 'pi pi-calculator',    to: '/panel/tipos-calculo', roles: ['admin'] },
-      { label: 'Criterios',        icon: 'pi pi-list-check',    to: '/panel/criterios',     roles: ['admin', 'evaluador'] },
+      { label: 'Criterios',        icon: 'pi pi-list-check',    to: '/panel/criterios',     roles: ['admin'] },
       { label: 'Programación',     icon: 'pi pi-calendar',      to: '/panel/programacion',  roles: ['admin'] },
       { label: 'Actividades',      icon: 'pi pi-calendar-plus', to: '/panel/actividades',   roles: ['admin'] },
     ],
@@ -59,7 +59,7 @@ const sections: NavSection[] = [
       { label: 'Revisiones',  icon: 'pi pi-file-edit', to: '/panel/revisiones', roles: ['admin'] },
       { label: 'Publicación', icon: 'pi pi-flag-fill', to: '/panel/resultados', roles: ['admin'] },
       { label: 'Auditoría',   icon: 'pi pi-history',   to: '/panel/auditoria',  roles: ['admin'] },
-      { label: 'Reportes',    icon: 'pi pi-download',  to: '/panel/reportes',   roles: ['admin', 'evaluador'] },
+      { label: 'Reportes',    icon: 'pi pi-download',  to: '/panel/reportes',   roles: ['admin'] },
       { label: 'Usuarios',    icon: 'pi pi-id-card',   to: '/panel/usuarios',   roles: ['admin'] },
     ],
   },

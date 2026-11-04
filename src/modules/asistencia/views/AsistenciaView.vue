@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import Dialog from 'primevue/dialog'
 import Textarea from 'primevue/textarea'
 import { useDiasCampamento } from '@/composables/useDiasCampamento'
@@ -47,6 +47,41 @@ type DiasEvaluacion = Tables<'dias_evaluacion'>
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const { momentos, fechas, cargar: cargarCampamento, labelDia, detectarMomentoActual } = useDiasCampamento()
+
+// ── Countdown ─────────────────────────────────────────────────────────────────
+const hoy = computed(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })
+
+const momentosDisponibles = computed(() =>
+  momentos.value.filter((m) => fechas.value[m] && fechas.value[m] <= hoy.value && (conteosActividades.value[m] ?? 0) > 0),
+)
+const momentosFuturos = computed(() =>
+  momentos.value.filter((m) => fechas.value[m] && fechas.value[m] > hoy.value && (conteosActividades.value[m] ?? 0) > 0),
+)
+const proximoMomento = computed(() => momentosFuturos.value[0] ?? null)
+const countdown = ref({ dias: 0, horas: 0, minutos: 0, segundos: 0 })
+
+function calcularCountdown() {
+  if (!proximoMomento.value) return
+  const fechaProx = fechas.value[proximoMomento.value]
+  if (!fechaProx) return
+  const target = new Date(fechaProx + 'T00:00:00')
+  const diff   = target.getTime() - Date.now()
+  if (diff <= 0) { cargar(); return }
+  const s = Math.floor(diff / 1000)
+  countdown.value = {
+    dias:     Math.floor(s / 86400),
+    horas:    Math.floor((s % 86400) / 3600),
+    minutos:  Math.floor((s % 3600) / 60),
+    segundos: s % 60,
+  }
+}
+
+let cdTimer: ReturnType<typeof setInterval> | null = null
+watch(proximoMomento, (val) => {
+  if (cdTimer) { clearInterval(cdTimer); cdTimer = null }
+  if (val) { calcularCountdown(); cdTimer = setInterval(calcularCountdown, 1000) }
+}, { immediate: true })
+onUnmounted(() => { if (cdTimer) clearInterval(cdTimer) })
 
 const ESTADO_CFG = {
   presente:    { label: 'Presente',    icon: 'pi pi-check',      active: 'ast-eb--presente-act',    idle: 'ast-eb--presente-idle'    },
@@ -108,7 +143,7 @@ async function cargar() {
         ? actividadesService.getConteosPorCampamento(campStore.selectedId)
         : Promise.resolve({} as Record<string, number>),
     ])
-    momentoActivo.value      = detectarMomentoActual()
+    momentoActivo.value      = session.esAdmin ? '' : detectarMomentoActual()
     dias.value               = diasData
     equipos.value            = equiposData.filter((e) => e.activo)
     conteosActividades.value = conteos
@@ -466,25 +501,86 @@ function filaClass(fila: FilaIntegrante) {
     <template v-else>
 
       <!-- ══════════════════════════════════════════════
-           PASO 1 — Elegir día
+           SIN DÍAS DISPONIBLES AÚN — pantalla de espera
       ══════════════════════════════════════════════ -->
-      <template v-if="paso === 1">
-        <div class="ast-page-header">
-          <div class="ast-page-header__icon"><i class="pi pi-users" /></div>
-          <div>
-            <h1 class="ast-page-title">Asistencia</h1>
-            <p class="ast-page-sub">Selecciona el día a registrar</p>
+      <div v-if="momentosDisponibles.length === 0 && !session.esAdmin" class="ast-espera">
+
+        <!-- Icono animado -->
+        <div class="ast-espera__icon-wrap">
+          <span class="ast-espera__icon">⛺</span>
+        </div>
+
+        <!-- Título -->
+        <div class="ast-espera__copy">
+          <h2 class="ast-espera__titulo">Las actividades comenzarán pronto</h2>
+          <p v-if="proximoMomento" class="ast-espera__sub">
+            Próximo día de asistencia
+          </p>
+          <p v-if="proximoMomento" class="ast-espera__next-day">
+            {{ labelDia(proximoMomento) }}
+          </p>
+        </div>
+
+        <!-- Countdown -->
+        <div v-if="proximoMomento" class="ast-espera__countdown">
+          <div class="ast-cd-bloque">
+            <span class="ast-cd-num">{{ String(countdown.dias).padStart(2,'0') }}</span>
+            <span class="ast-cd-label">días</span>
+          </div>
+          <span class="ast-cd-sep">:</span>
+          <div class="ast-cd-bloque">
+            <span class="ast-cd-num">{{ String(countdown.horas).padStart(2,'0') }}</span>
+            <span class="ast-cd-label">horas</span>
+          </div>
+          <span class="ast-cd-sep">:</span>
+          <div class="ast-cd-bloque">
+            <span class="ast-cd-num">{{ String(countdown.minutos).padStart(2,'0') }}</span>
+            <span class="ast-cd-label">min</span>
+          </div>
+          <span class="ast-cd-sep">:</span>
+          <div class="ast-cd-bloque ast-cd-seg">
+            <span class="ast-cd-num">{{ String(countdown.segundos).padStart(2,'0') }}</span>
+            <span class="ast-cd-label">seg</span>
           </div>
         </div>
 
+        <!-- Días programados -->
+        <div v-if="momentosFuturos.length" class="ast-espera__dias">
+          <p class="ast-espera__dias-label">Días programados</p>
+          <div class="ast-espera__dias-row">
+            <span
+              v-for="m in momentosFuturos"
+              :key="m"
+              class="ast-espera__dia-pill"
+              :class="{ 'ast-espera__dia-pill--next': m === proximoMomento }"
+            >
+              <i v-if="m === proximoMomento" class="pi pi-clock" style="font-size:0.65rem;" />
+              {{ labelDia(m) }}
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      <template v-else>
+
+      <!-- ══════════════════════════════════════════════
+           PASO 1 — Elegir día
+      ══════════════════════════════════════════════ -->
+      <template v-if="paso === 1">
         <div class="ast-dias-grid">
           <button
-            v-for="m in momentos.filter(m => (conteosActividades[m] ?? 0) > 0)"
+            v-for="m in (session.esAdmin
+              ? momentos.filter(m => (conteosActividades[m] ?? 0) > 0)
+              : momentosDisponibles)"
             :key="m"
             class="ast-dia-card"
             :class="{
               'ast-dia-card--locked':    dias.find((d) => d.momento === m)?.cerrado,
               'ast-dia-card--sin-act':   !conteosActividades[m],
+              'ast-dia-card--hoy':       fechas[m] === hoy,
+              'ast-dia-card--futuro':    fechas[m] > hoy,
+              'ast-dia-card--pasado':    fechas[m] < hoy,
             }"
             @click="seleccionarDia(m)"
           >
@@ -509,6 +605,17 @@ function filaClass(fila: FilaIntegrante) {
             </span>
             <i v-else class="pi pi-chevron-right ast-dia-card__chevron" />
           </button>
+        </div>
+
+        <!-- Hint admin: ningún día seleccionado aún -->
+        <div v-if="session.esAdmin && momentoActivo === ''" class="ast-admin-hint">
+          <div class="ast-admin-hint__card">
+            <div class="ast-admin-hint__icon-wrap">
+              <i class="pi pi-calendar-clock ast-admin-hint__icon" />
+            </div>
+            <h3 class="ast-admin-hint__title">Selecciona un día</h3>
+            <p class="ast-admin-hint__text">Elige uno de los días que aparecen arriba para ver y registrar la evaluación.</p>
+          </div>
         </div>
       </template>
 
@@ -926,6 +1033,8 @@ function filaClass(fila: FilaIntegrante) {
         </template>
 
       </template>
+
+      </template><!-- /v-else días disponibles -->
     </template>
 
     <!-- ══════════════════════════════════════════════
@@ -1052,14 +1161,17 @@ function filaClass(fila: FilaIntegrante) {
 .ast-page-sub   { font-size: 0.8rem; color: #94a3b8; margin: 0; }
 
 .ast-dias-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.75rem;
   padding: 0 1rem;
 }
 
+.ast-dia-card { flex: 0 0 calc(50% - 0.375rem); max-width: 180px; }
+
 @media (min-width: 500px) {
-  .ast-dias-grid { grid-template-columns: repeat(4, 1fr); }
+  .ast-dia-card { flex: 0 0 auto; width: 150px; }
 }
 
 .ast-dia-card {
@@ -1127,6 +1239,89 @@ function filaClass(fila: FilaIntegrante) {
   background: #fef3c7;
   box-shadow: 0 4px 12px rgba(245,158,11,.15);
 }
+
+/* Día de hoy — verde intenso */
+.ast-dia-card--hoy {
+  border-color: #16a34a;
+  background: #dcfce7;
+  box-shadow: 0 0 0 3px rgba(22,163,74,.18), 0 2px 8px rgba(22,163,74,.15);
+}
+.ast-dia-card--hoy .ast-dia-card__letter { color: #15803d; }
+.ast-dia-card--hoy .ast-dia-card__label  { color: #166534; }
+.ast-dia-card--hoy .ast-dia-card__date   { color: #16a34a; }
+.ast-dia-card--hoy:hover {
+  border-color: #15803d;
+  background: #bbf7d0;
+  box-shadow: 0 0 0 3px rgba(22,163,74,.25), 0 4px 14px rgba(22,163,74,.2);
+}
+
+/* Días futuros — tono apagado */
+.ast-dia-card--futuro {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  opacity: 0.6;
+}
+.ast-dia-card--futuro .ast-dia-card__letter { color: #94a3b8; }
+.ast-dia-card--futuro:hover {
+  opacity: 1;
+  border-color: #94a3b8;
+  background: #f1f5f9;
+  box-shadow: 0 4px 12px rgba(0,0,0,.08);
+}
+
+/* Días pasados — historial */
+.ast-dia-card--pasado {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+}
+.ast-dia-card--pasado .ast-dia-card__letter { color: #94a3b8; }
+.ast-dia-card--pasado .ast-dia-card__label  { color: #94a3b8; }
+.ast-dia-card--pasado .ast-dia-card__date   { color: #cbd5e1; }
+.ast-dia-card--pasado::after {
+  content: 'Historial';
+  position: absolute; top: 0.4rem; right: 0.5rem;
+  font-size: 0.55rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; color: #94a3b8;
+}
+.ast-dia-card--pasado:hover {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  box-shadow: 0 4px 12px rgba(0,0,0,.06);
+}
+
+/* ── Hint admin sin día seleccionado ── */
+.ast-admin-hint {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+.ast-admin-hint__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1.5px solid #bbf7d0;
+  border-radius: 20px;
+  padding: 2rem;
+  text-align: center;
+  max-width: 320px;
+  width: 100%;
+  box-shadow: 0 4px 16px rgba(22,163,74,0.08);
+}
+.ast-admin-hint__icon-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #dcfce7;
+  border: 2px solid #86efac;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ast-admin-hint__icon { font-size: 1.6rem; color: #16a34a; }
+.ast-admin-hint__title { font-size: 1rem; font-weight: 700; color: #15803d; margin: 0; }
+.ast-admin-hint__text { font-size: 0.85rem; color: #4b5563; margin: 0; line-height: 1.5; }
 
 /* ═══════════════════════════════════════════════════════════
    PASO 2 — Actividades
@@ -1621,5 +1816,171 @@ function filaClass(fila: FilaIntegrante) {
 @media (min-width: 960px) {
   .ast-act-list { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
   .ast-filas    { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   PANTALLA DE ESPERA — minimalista
+══════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════
+   Pantalla de espera — evaluador
+════════════════════════════════════════ */
+.ast-espera {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.75rem;
+  padding: 3rem 1.25rem 4rem;
+  min-height: 72vh;
+  text-align: center;
+}
+
+.ast-espera__icon-wrap {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  border: 2px solid #bbf7d0;
+  box-shadow: 0 8px 24px rgba(22,163,74,0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: ast-float 3s ease-in-out infinite;
+}
+.ast-espera__icon {
+  font-size: 2.75rem;
+  line-height: 1;
+}
+
+.ast-espera__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+.ast-espera__titulo {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.ast-espera__sub {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.ast-espera__next-day {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #16a34a;
+  margin: 0;
+}
+
+.ast-espera__countdown {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1.5px solid #bbf7d0;
+  border-radius: 22px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 4px 20px rgba(22,163,74,0.1);
+}
+.ast-cd-bloque {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 3rem;
+}
+.ast-cd-num {
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+.ast-cd-seg .ast-cd-num { color: #16a34a; }
+.ast-cd-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #94a3b8;
+}
+.ast-cd-sep {
+  font-size: 1.75rem;
+  font-weight: 300;
+  color: #86efac;
+  margin-bottom: 1.2rem;
+  user-select: none;
+  animation: ast-blink 1s step-end infinite;
+}
+
+.ast-espera__dias {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+.ast-espera__dias-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #cbd5e1;
+  margin: 0;
+}
+.ast-espera__dias-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: center;
+}
+.ast-espera__dia-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  border: 1.5px solid #e2e8f0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.ast-espera__dia-pill--next {
+  color: #15803d;
+  background: #dcfce7;
+  border-color: #86efac;
+  font-weight: 700;
+  box-shadow: 0 2px 10px rgba(22,163,74,0.18);
+}
+
+@keyframes ast-float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-7px); }
+}
+@keyframes ast-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+@media (min-width: 480px) {
+  .ast-espera__titulo  { font-size: 1.5rem; }
+  .ast-cd-num          { font-size: 2.9rem; }
+  .ast-cd-bloque       { min-width: 3.75rem; }
+  .ast-espera__icon-wrap { width: 100px; height: 100px; }
+  .ast-espera__icon    { font-size: 3.25rem; }
+}
+@media (min-width: 768px) {
+  .ast-espera { max-width: 460px; margin: 0 auto; }
 }
 </style>
