@@ -1,3 +1,11 @@
+Warning: --db-url is deprecated and will be removed in v4. Use --remote=<db-url> instead, or --remote=arnxtzamayflzptlkwxy with an access token set
+WARN: auth.email.enable_signup is deprecated and will be removed in v4, use auth.email.enabled instead.
+WARN: auth.sms.enable_signup is deprecated and will be removed in v4, use auth.sms.enabled instead.
+Target: custom Postgres (aws-0-us-east-2.pooler.supabase.com:5432)
+Connecting to aws-0-us-east-2.pooler.supabase.com 5432
+Generated TypeScript is unformatted. Format it with:
+  npx oxfmt <generated-file.ts>
+
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
@@ -1239,7 +1247,7 @@ isOneToOne: false
                   ]
                 },"publico_ranking": {
                   Row: {
-                    "campamento_id": string,"equipo_color": string,"equipo_id": string,"equipo_nombre": string,"medalla": string | null,"posicion": number | null,"pts_asistencia": number | null,"pts_bonus": number | null,"pts_bruto": number | null,"pts_demeritos": number | null,"pts_escala": number | null,"pts_inscripcion": number | null,"pts_liderazgo": number | null,"pts_rubrica": number | null
+                    "campamento_id": string,"equipo_color": string,"equipo_id": string,"equipo_nombre": string,"medalla": string | null,"posicion": number | null,"pts_actividades": number | null,"pts_asistencia": number | null,"pts_bonus": number | null,"pts_bruto": number | null,"pts_demeritos": number | null,"pts_escala": number | null,"pts_inscripcion": number | null,"pts_liderazgo": number | null,"pts_rubrica": number | null
                   }
                   ComputedFields: never
                   Relationships: [
@@ -1477,6 +1485,86 @@ isOneToOne: false
       referencedColumns: ["equipo_id"]
     }
                   ]
+                },"v_eval_actividades_equipo": {
+                  Row: {
+                    "campamento_id": string,"equipo_id": string,"pts_actividades": number | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "equipos"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "publico_equipos"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "publico_incidencias_resumen"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "publico_ranking"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "v_asistencia_equipo_actividad"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "v_asistencia_equipo_dia"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "v_inscripcion_equipo"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "v_liderazgo_equipo_dia"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "v_puntaje_equipo"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "actividad_eval_registros_equipo_id_fkey"
+      columns: ["equipo_id"]
+isOneToOne: false
+      referencedRelation: "v_puntaje_rubrica_equipo_dia"
+      referencedColumns: ["equipo_id"]
+    },{
+      foreignKeyName: "equipos_campamento_id_fkey"
+      columns: ["campamento_id"]
+isOneToOne: false
+      referencedRelation: "campamento"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "equipos_campamento_id_fkey"
+      columns: ["campamento_id"]
+isOneToOne: false
+      referencedRelation: "publico_campamento"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"v_incidencias_pendientes": {
                   Row: {
                     "alcance": string,"campamento_id": string,"codigo": string,"codigo_nombre": string,"created_at": string,"descargo_equipo": string | null,"equipo_color": string,"equipo_id": string,"equipo_nombre": string,"estado": string,"fecha": string,"hecho": string,"hora": string,"id": string,"momento": string | null,"puntos": number,"registrado_por": string,"registrado_por_nombre": string,"tipo": string
@@ -1663,7 +1751,7 @@ isOneToOne: false
                   ]
                 },"v_puntaje_equipo": {
                   Row: {
-                    "campamento_id": string,"equipo_color": string,"equipo_id": string,"equipo_nombre": string,"medalla": string | null,"posicion": number | null,"pts_asistencia": number | null,"pts_base": number | null,"pts_bonus": number | null,"pts_bruto": number | null,"pts_demeritos": number | null,"pts_escala": number | null,"pts_inscripcion": number | null,"pts_liderazgo": number | null,"pts_rubrica": number | null
+                    "campamento_id": string,"equipo_color": string,"equipo_id": string,"equipo_nombre": string,"medalla": string | null,"posicion": number | null,"pts_actividades": number | null,"pts_asistencia": number | null,"pts_base": number | null,"pts_bonus": number | null,"pts_bruto": number | null,"pts_demeritos": number | null,"pts_escala": number | null,"pts_inscripcion": number | null,"pts_liderazgo": number | null,"pts_rubrica": number | null
                   }
                   ComputedFields: never
                   Relationships: [

@@ -32,7 +32,7 @@ const sections: NavSection[] = [
       { label: 'Evaluar',     icon: 'pi pi-star',                 to: '/panel/evaluar',               roles: ['admin', 'evaluador'] },
       { label: 'Actividades',  icon: 'pi pi-users',                to: '/panel/asistencia',            roles: ['admin', 'evaluador'] },
       { label: 'Incidencias', icon: 'pi pi-exclamation-triangle', to: '/panel/incidencias',           roles: ['admin', 'evaluador'] },
-      { label: 'Liderazgo',   icon: 'pi pi-bolt',                 to: '/panel/liderazgo/indicadores', roles: ['admin'] },
+      /* { label: 'Liderazgo',   icon: 'pi pi-bolt',                 to: '/panel/liderazgo/indicadores', roles: ['admin'] }, */
     ],
   },
   {

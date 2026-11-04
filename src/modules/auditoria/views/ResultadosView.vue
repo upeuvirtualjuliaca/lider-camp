@@ -1,24 +1,38 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import {
-  publicacionService,
   campamentoAdminService,
-  type PendientePublicacion,
 } from '@/modules/auditoria/services/auditoria.service'
+import {
+  diasService, programacionRubricaService, type DiasEvaluacion,
+} from '@/modules/observaciones/services/observaciones.service'
+import { actividadesService } from '@/modules/asistencia/services/asistencia.service'
 import { useCampamentoStore } from '@/stores/campamento'
-import { useDiasCampamento } from '@/composables/useDiasCampamento'
+
+const LABEL_DIA: Record<string, string> = {
+  J: 'Jueves', V: 'Viernes', S: 'Sábado', D: 'Domingo',
+}
 
 const campStore = useCampamentoStore()
-const { dias: diasConfig, cargar: cargarDias, labelDia } = useDiasCampamento()
+const router    = useRouter()
 
-const dias          = ref<PendientePublicacion[]>([])
+const diasDelCampamento  = ref<DiasEvaluacion[]>([])
+const momentosConProg    = ref<Set<string>>(new Set())
+
+// Solo exigir cierre de días que tienen contenido programado (los que aparecen en Avance)
+const diasAbiertos = computed(() =>
+  diasDelCampamento.value.filter(
+    (d) => !d.cerrado && momentosConProg.value.has(d.momento ?? ''),
+  ),
+)
+
 const cerrado       = ref(false)
 const cerradoAt     = ref<string | null>(null)
 const motivoCierre  = ref<string | null>(null)
 const cargando      = ref(true)
 const errorMsg      = ref('')
 
-const publicando    = ref<string | null>(null)
 const motivoInput   = ref('')
 const forzar        = ref(false)
 const cerrando      = ref(false)
@@ -26,24 +40,6 @@ const reabriendo    = ref(false)
 const errCierre     = ref('')
 const confirmCierre = ref(false)
 const mostrarAyuda  = ref(false)
-
-const diasPublicados = computed(() => dias.value.filter((d) => d.publicado).length)
-
-function fechaDia(momento: string): string {
-  const dc = diasConfig.value.find((d) => d.codigo === momento)
-  if (!dc) return ''
-  const d = new Date(dc.fecha + 'T12:00:00')
-  return d.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })
-}
-
-function iconoDia(momento: string): string {
-  const dc = diasConfig.value.find((d) => d.codigo === momento)
-  if (!dc) return 'pi-calendar'
-  const dow = new Date(dc.fecha + 'T12:00:00').getDay()
-  // 4=jue, 5=vie, 6=sáb, 0=dom
-  const map: Record<number, string> = { 4: 'pi-sun', 5: 'pi-star', 6: 'pi-moon', 0: 'pi-heart' }
-  return map[dow] ?? 'pi-calendar'
-}
 
 onMounted(cargar)
 watch(() => campStore.selectedId, cargar)
@@ -53,12 +49,14 @@ async function cargar() {
   errorMsg.value = ''
   try {
     if (!campStore.selectedId) throw new Error('No hay campamento seleccionado.')
-    const [diaData, camp] = await Promise.all([
-      publicacionService.getPendientes(campStore.selectedId),
+    const [camp, diasData, momentosRubrica, conteosAct] = await Promise.all([
       campamentoAdminService.getEstado(campStore.selectedId),
-      cargarDias(),
+      diasService.getTodos(campStore.selectedId),
+      programacionRubricaService.getMomentosConProgramacion(campStore.selectedId),
+      actividadesService.getConteosPorCampamento(campStore.selectedId),
     ])
-    dias.value         = diaData
+    diasDelCampamento.value = diasData
+    momentosConProg.value   = new Set([...momentosRubrica, ...Object.keys(conteosAct)])
     cerrado.value      = camp.cerrado
     cerradoAt.value    = camp.cerrado_at
     motivoCierre.value = camp.motivo_cierre
@@ -69,29 +67,13 @@ async function cargar() {
   }
 }
 
-async function togglePublicado(dia: PendientePublicacion) {
-  publicando.value = dia.momento as string
-  try {
-    if (dia.publicado) {
-      await publicacionService.despublicarDia(campStore.selectedId!, dia.momento as string)
-    } else {
-      await publicacionService.publicarDia(campStore.selectedId!, dia.momento as string)
-    }
-    await cargar()
-  } catch (e: unknown) {
-    errorMsg.value = e instanceof Error ? e.message : 'Error al actualizar'
-  } finally {
-    publicando.value = null
-  }
-}
-
 async function cerrarCampamento() {
   if (!motivoInput.value.trim()) { errCierre.value = 'Ingresa el motivo del cierre.'; return }
   cerrando.value = true; errCierre.value = ''
   try {
     await campamentoAdminService.cerrar(campStore.selectedId!, motivoInput.value.trim(), forzar.value)
     confirmCierre.value = false; motivoInput.value = ''; forzar.value = false
-    await cargar()
+    router.push('/ranking?countdown=1')
   } catch (e: unknown) {
     errCierre.value = e instanceof Error ? e.message : 'Error al cerrar'
   } finally {
@@ -121,13 +103,6 @@ function formatFecha(ts: string | null) {
   })
 }
 
-function completitudColor(val: number, total: number) {
-  if (total === 0) return 'text-slate-400'
-  const pct = val / total
-  if (pct >= 1) return 'text-green-600 font-bold'
-  if (pct >= 0.5) return 'text-amber-600 font-semibold'
-  return 'text-red-500 font-semibold'
-}
 </script>
 
 <template>
@@ -178,127 +153,7 @@ function completitudColor(val: number, total: number) {
         </div>
 
         <!-- ══════════════════════════════════════════
-             SECCIÓN 1: Publicación por día
-        ══════════════════════════════════════════ -->
-        <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-4">
-
-          <!-- Header sección -->
-          <div class="flex items-center justify-between px-5 py-4 border-b border-slate-50">
-            <div class="flex items-center gap-2.5">
-              <div class="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
-                <i class="pi pi-eye text-green-600 text-sm" />
-              </div>
-              <div>
-                <h2 class="text-sm font-bold text-slate-800">Resultados por día</h2>
-                <p class="text-xs text-slate-400">
-                  {{ diasPublicados }} de {{ dias.length }} días publicados
-                </p>
-              </div>
-            </div>
-            <!-- Barra de progreso -->
-            <div class="hidden sm:flex items-center gap-2">
-              <div class="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  class="h-full bg-green-500 rounded-full transition-all duration-500"
-                  :style="{ width: dias.length ? `${(diasPublicados / dias.length) * 100}%` : '0%' }"
-                />
-              </div>
-              <span class="text-xs font-semibold text-slate-500">{{ dias.length ? Math.round((diasPublicados / dias.length) * 100) : 0 }}%</span>
-            </div>
-          </div>
-
-          <!-- Grid de días -->
-          <div class="p-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div
-              v-for="dia in dias"
-              :key="dia.momento ?? ''"
-              class="rounded-xl border transition-all duration-200 overflow-hidden"
-              :class="dia.publicado
-                ? 'border-green-200 bg-green-50'
-                : 'border-slate-200 bg-white'"
-            >
-              <!-- Cabecera día -->
-              <div class="flex items-center justify-between px-4 py-3">
-                <div class="flex items-center gap-2.5">
-                  <div
-                    class="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
-                    :class="dia.publicado ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-500'"
-                  >
-                    <i :class="['pi text-sm', iconoDia(dia.momento ?? '')]" />
-                  </div>
-                  <div>
-                    <p class="text-sm font-bold text-slate-700 capitalize">
-                      {{ labelDia(dia.momento ?? '') }}
-                    </p>
-                    <p class="text-[11px] text-slate-400 capitalize leading-tight">
-                      {{ fechaDia(dia.momento ?? '') }}
-                    </p>
-                    <span
-                      class="text-[11px] font-semibold"
-                      :class="dia.publicado ? 'text-green-600' : 'text-slate-400'"
-                    >
-                      {{ dia.publicado ? '● Visible al público' : '○ Oculto' }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Stats de completitud -->
-              <div class="px-4 pb-3 flex flex-col gap-1.5">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs text-slate-500 flex items-center gap-1">
-                    <i class="pi pi-list-check text-xs" /> Rúbrica
-                  </span>
-                  <span class="text-xs" :class="completitudColor(dia.equipos_rubrica ?? 0, dia.equipos_activos ?? 0)">
-                    {{ dia.equipos_rubrica ?? 0 }} / {{ dia.equipos_activos ?? 0 }} equipos
-                  </span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="text-xs text-slate-500 flex items-center gap-1">
-                    <i class="pi pi-bolt text-xs" /> Liderazgo
-                  </span>
-                  <span class="text-xs" :class="completitudColor(dia.equipos_liderazgo ?? 0, dia.equipos_activos ?? 0)">
-                    {{ dia.equipos_liderazgo ?? 0 }} / {{ dia.equipos_activos ?? 0 }} equipos
-                  </span>
-                </div>
-                <div class="flex items-center justify-between">
-                  <span class="text-xs text-slate-500 flex items-center gap-1">
-                    <i class="pi pi-users text-xs" /> Asistencia
-                  </span>
-                  <span class="text-xs" :class="dia.tiene_asistencia ? 'text-green-600 font-bold' : 'text-red-500 font-semibold'">
-                    {{ dia.tiene_asistencia ? 'Registrada' : 'Sin datos' }}
-                  </span>
-                </div>
-
-                <!-- Botón publicar/ocultar -->
-                <button
-                  class="mt-1 w-full h-10 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-                  :class="dia.publicado
-                    ? 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
-                    : 'bg-green-600 hover:bg-green-700 text-white shadow-sm'"
-                  :disabled="publicando === dia.momento"
-                  @click="togglePublicado(dia)"
-                >
-                  <i
-                    v-if="publicando === dia.momento"
-                    class="pi pi-spin pi-spinner text-xs"
-                  />
-                  <i v-else :class="dia.publicado ? 'pi pi-eye-slash text-xs' : 'pi pi-eye text-xs'" />
-                  {{ publicando === dia.momento ? 'Actualizando…' : dia.publicado ? 'Ocultar del público' : 'Publicar resultados' }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Si no hay días programados -->
-            <div v-if="dias.length === 0" class="col-span-2 flex flex-col items-center gap-2 py-10 text-slate-400">
-              <i class="pi pi-calendar text-2xl text-slate-300" />
-              <p class="text-sm">No hay días programados en el campamento activo.</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- ══════════════════════════════════════════
-             SECCIÓN 2: Estado del campamento
+             Estado del campamento
         ══════════════════════════════════════════ -->
         <div
           class="bg-white rounded-2xl border shadow-sm overflow-hidden"
@@ -332,10 +187,25 @@ function completitudColor(val: number, total: number) {
                 registrar ni modificar ningún dato. El administrador conserva acceso total.
               </p>
 
+              <!-- Advertencia: días sin cerrar -->
+              <div v-if="diasAbiertos.length > 0" class="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
+                <i class="pi pi-exclamation-triangle text-amber-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p class="text-sm font-semibold text-amber-800 mb-1">Debes cerrar todos los días antes de cerrar el campamento.</p>
+                  <p class="text-xs text-amber-700">
+                    Días pendientes:
+                    <strong>{{ diasAbiertos.map(d => LABEL_DIA[d.momento ?? ''] ?? d.momento).join(', ') }}</strong>
+                  </p>
+                  <p class="text-xs text-amber-600 mt-1">Ve a la vista de <strong>Avance</strong> y cierra cada día antes de continuar.</p>
+                </div>
+              </div>
+
               <!-- Formulario de cierre -->
               <div v-if="!confirmCierre">
                 <button
-                  class="inline-flex items-center gap-2 px-5 h-11 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm rounded-xl transition-colors"
+                  class="inline-flex items-center gap-2 px-5 h-11 font-semibold text-sm rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  :class="diasAbiertos.length > 0 ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 text-white'"
+                  :disabled="diasAbiertos.length > 0"
                   @click="confirmCierre = true"
                 >
                   <i class="pi pi-lock text-sm" />
