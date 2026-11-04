@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { publicoService, type PublicoCampamento } from '@/modules/criterios/services/criterios.service'
 
@@ -68,6 +68,13 @@ const highlights = [
   { icon: 'pi pi-book',     label: 'Reglas',      desc: 'Puntaje, medallas y deméritos', to: '/reglas',     color: '#059669', bg: '#d1fae5' },
 ]
 
+const edicionParts = computed(() => {
+  const ed = campamentos.value[0]?.edicion ?? ''
+  const idx = ed.indexOf(' ')
+  if (idx === -1) return { main: ed, rest: '' }
+  return { main: ed.slice(0, idx), rest: ed.slice(idx) }
+})
+
 const stats = [
   { num: '4',    label: 'Días de campamento', icon: '🌅' },
   { num: '16+',  label: 'Criterios evaluados', icon: '📋' },
@@ -83,15 +90,30 @@ const stats = [
          HERO
     ══════════════════════════════════════════ -->
     <section class="hero">
+      <video
+        class="hero__video"
+        :src="'/lider-camp/videos/hero.mp4'"
+        autoplay
+        muted
+        loop
+        playsinline
+      />
       <div class="hero__overlay" />
       <div class="hero__content">
-        <div class="hero__tag">
-          <i class="pi pi-star-fill" /> Sistema de evaluación universitaria
-        </div>
+        <!-- <div class="hero__tag">
+          <i class="pi pi-star-fill" /> Sistema de evaluación
+        </div> -->
         <h1 class="hero__title">
           <span class="hero__title-camp">🏕</span>
-          LiderCamp<br><span class="hero__title-ed">2026-II</span>
+          LiderCamp
         </h1>
+        <div v-if="campamentos[0]?.edicion" class="hero__edicion-wrap">
+          <span class="hero__edicion-deco" />
+          <span class="hero__edicion">
+            <span class="hero__edicion-main">{{ edicionParts.main }}</span><span class="hero__edicion-rest">{{ edicionParts.rest }}</span>
+          </span>
+          <span class="hero__comet" aria-hidden="true" />
+        </div>
         <p class="hero__sub">
           Evalúa criterios, registra liderazgo,<br>
           compite con honor y construye comunidad.
@@ -293,6 +315,13 @@ const stats = [
 </template>
 
 <style scoped>
+@font-face {
+  font-family: 'Autography';
+  src: url('/lider-camp/fonts/Autography.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 /* ═══════════════════════════════════════════════
    BASE
 ═══════════════════════════════════════════════ */
@@ -310,10 +339,17 @@ const stats = [
   align-items: center;
   text-align: center;
   overflow: hidden;
-  background:
-    url('https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=1400&q=80')
-    center / cover no-repeat;
-  background-color: #047857; /* fallback */
+  background-color: #047857; /* fallback mientras carga el video */
+}
+.hero__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  z-index: 0;
+  pointer-events: none;
 }
 .hero__overlay {
   position: absolute;
@@ -354,16 +390,172 @@ const stats = [
   font-size: clamp(2.6rem, 8vw, 5rem);
   font-weight: 900;
   color: #fff;
-  line-height: 1.05;
-  margin: 0 0 0.5rem;
+  line-height: 1;
+  margin: 0;
   letter-spacing: -0.03em;
 }
 .hero__title-camp { font-size: 0.7em; }
-.hero__title-ed {
-  font-size: 0.52em;
-  font-weight: 600;
-  color: rgba(255,255,255,0.65);
-  letter-spacing: 0.05em;
+
+/* ── Bloque edición ──────────────────────────────────────────
+   Ciclo total: 8s
+   · Cometa  : delay 0.4s, duración 8s, infinite
+   · Texto   : delay 2.9s (= 0.4 + 8×0.31), duración 8s, infinite
+   Los dos están sincronizados: cuando el cometa llega (31 %)
+   el texto empieza a revelarse; al final del ciclo el texto
+   desaparece justo cuando el cometa inicia el siguiente vuelo.
+────────────────────────────────────────────────────────────── */
+
+/* 1 · Estrella fugaz — vuelo lento + estela + impacto */
+@keyframes comet-travel {
+  0% {
+    transform: translate(320px, -190px);
+    opacity: 0;
+    box-shadow: 0 0 4px 2px #fde68a;
+  }
+  4% {
+    opacity: 1;
+    box-shadow:
+      0 0 6px 3px #fff,
+      0 0 14px 7px #fde68a,
+      42px  -25px 3px -1px rgba(253,230,138,0.72),
+      80px  -48px 4px -1px rgba(253,230,138,0.46),
+      118px -70px 5px -1px rgba(253,230,138,0.22),
+      158px -94px 6px -1px rgba(253,230,138,0.08);
+  }
+  /* viaje lento: llega al 31 % */
+  31% {
+    transform: translate(0, 0);
+    opacity: 1;
+    box-shadow:
+      0 0 8px 4px #fff,
+      0 0 18px 9px #fde68a,
+      42px  -25px 3px -1px rgba(253,230,138,0.65),
+      80px  -48px 4px -1px rgba(253,230,138,0.38),
+      118px -70px 5px -1px rgba(253,230,138,0.15);
+  }
+  /* impacto: destello */
+  40% {
+    transform: translate(0, 0) scale(2.6);
+    opacity: 1;
+    box-shadow:
+      0 0 24px 14px #fff,
+      0 0 55px 28px #fde68a,
+      0 0 90px 45px rgba(251,191,36,0.22);
+  }
+  /* se expande y desaparece */
+  50% {
+    transform: translate(0, 0) scale(5);
+    opacity: 0;
+    box-shadow: none;
+  }
+  /* regresa invisible al punto de inicio */
+  51% {
+    transform: translate(320px, -190px) scale(1);
+    opacity: 0;
+    box-shadow: none;
+  }
+  100% {
+    transform: translate(320px, -190px) scale(1);
+    opacity: 0;
+    box-shadow: none;
+  }
+}
+
+/* 2 · Texto: aparece con el impacto, brilla, se desvanece al final del ciclo */
+@keyframes texto-ciclo {
+  0% {
+    opacity: 0;
+    transform: scale(0.86);
+    filter:
+      drop-shadow(0 0 30px rgba(255,255,255,1))
+      drop-shadow(0 0 20px rgba(253,230,138,1));
+  }
+  13% {
+    opacity: 1;
+    transform: scale(1);
+    filter: drop-shadow(0 0 16px rgba(253,230,138,0.75));
+  }
+  /* parpadeo suave — estrella en el cielo */
+  38% { filter: drop-shadow(0 2px 12px rgba(245,158,11,0.55)); }
+  52% {
+    filter:
+      drop-shadow(0 0 20px rgba(253,230,138,0.95))
+      drop-shadow(0 0 6px rgba(255,255,255,0.5));
+  }
+  66% { filter: drop-shadow(0 2px 12px rgba(245,158,11,0.55)); }
+  /* fade out antes del próximo ciclo */
+  82% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: scale(0.94);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+}
+
+.hero__edicion-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin: 0.1rem 0 1.9rem;
+  position: relative;
+}
+
+/* Núcleo de la estrella fugaz */
+.hero__comet {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: #fff;
+  pointer-events: none;
+  animation: comet-travel 8s cubic-bezier(0.5, 0, 0.25, 1) 0.4s infinite;
+  z-index: 5;
+}
+/* línea izquierda que se desvanece hacia el texto */
+.hero__edicion-deco {
+  display: block;
+  width: 48px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(253,230,138,0.6));
+  flex-shrink: 0;
+  margin-right: 0.6rem;
+}
+.hero__edicion {
+  font-family: 'Autography', cursive;
+  font-size: clamp(2.2rem, 5.5vw, 3.4rem);
+  font-weight: 400;
+  /* gradiente con shimmer animado */
+  background: linear-gradient(
+    105deg,
+    #f59e0b 0%,
+    #fde68a 30%,
+    #fffbeb 50%,
+    #fde68a 70%,
+    #f59e0b 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  filter: drop-shadow(0 2px 12px rgba(245,158,11,0.55));
+  /* delay 4.4s = 0.4 + 8×0.50 → aparece después de que el cometa desaparece */
+  animation: texto-ciclo 8s ease-out 4.4s infinite;
+  white-space: nowrap;
+}
+.hero__edicion-main {
+  font-size: 1em;
+}
+.hero__edicion-rest {
+  font-size: 0.48em;
+  vertical-align: middle;
+  opacity: 0.85;
+  letter-spacing: 0.06em;
 }
 
 .hero__sub {
@@ -473,11 +665,15 @@ const stats = [
    CAMPAMENTOS
 ═══════════════════════════════════════════════ */
 .camps-grid {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-wrap: wrap;
   gap: 1.25rem;
+  justify-content: center;
 }
-@media (min-width: 600px) { .camps-grid { grid-template-columns: repeat(2, 1fr); } }
+.camp-card {
+  width: 100%;
+  max-width: 420px;
+}
 
 .camp-card {
   background: #fff;

@@ -14,17 +14,6 @@ const route = useRoute()
         <span class="pub-header__ed">2026-II</span>
       </RouterLink>
 
-      <nav class="pub-header__nav">
-        <RouterLink to="/ranking"    class="pub-nav-link" :class="{ active: route.path === '/ranking' }">
-          <i class="pi pi-trophy" /> Ranking
-        </RouterLink>
-        <RouterLink to="/calendario" class="pub-nav-link" :class="{ active: route.path === '/calendario' }">
-          <i class="pi pi-calendar" /> Calendario
-        </RouterLink>
-        <RouterLink to="/reglas"     class="pub-nav-link" :class="{ active: route.path === '/reglas' }">
-          <i class="pi pi-book" /> Reglas
-        </RouterLink>
-      </nav>
 
       <RouterLink to="/login" class="pub-header__login">
         <i class="pi pi-sign-in" />
@@ -39,12 +28,7 @@ const route = useRoute()
     <footer class="pub-footer">
       <div class="pub-footer__inner">
         <span class="pub-footer__brand">🏕 LiderCamp 2026-II</span>
-        <nav class="pub-footer__links">
-          <RouterLink to="/ranking">Ranking</RouterLink>
-          <RouterLink to="/calendario">Calendario</RouterLink>
-          <RouterLink to="/reglas">Reglas</RouterLink>
-        </nav>
-        <span class="pub-footer__copy">Sistema de evaluación universitaria</span>
+        <img :src="'/lider-camp/images/logo-upeu.svg'" alt="UPeU" class="pub-footer__logo" />
       </div>
     </footer>
 
@@ -175,9 +159,11 @@ const route = useRoute()
   transition: color 0.14s;
 }
 .pub-footer__links a:hover { color: #fff; }
-.pub-footer__copy {
-  font-size: 0.75rem;
-  color: rgba(255,255,255,0.40);
+.pub-footer__logo {
+  height: 36px;
+  width: auto;
+  opacity: 0.75;
+  filter: brightness(0) invert(1);
 }
 
 /* ─── Tablet + ─── */
