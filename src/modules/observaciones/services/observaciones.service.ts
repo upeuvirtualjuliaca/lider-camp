@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { enqueue } from '@/lib/offlineQueue'
 import type { Tables } from '@/types/database'
 
 // ── Tipos exportados ────────────────────────────────────────────────────────
@@ -150,6 +151,21 @@ export const observacionesService = {
   },
 
   async upsert(datos: UpsertObservacion): Promise<Observacion> {
+    if (!navigator.onLine) {
+      await enqueue({
+        table: 'observaciones',
+        operation: 'upsert',
+        payload: datos as unknown as Record<string, unknown>,
+        conflictFields: 'equipo_id,programacion_id,evaluador_id',
+      })
+      // Resultado optimista: se mostrará en UI hasta que sincronice
+      return {
+        id: crypto.randomUUID(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...datos,
+      } as unknown as Observacion
+    }
     const { data, error } = await supabase
       .from('observaciones')
       .upsert(datos, { onConflict: 'equipo_id,programacion_id,evaluador_id' })

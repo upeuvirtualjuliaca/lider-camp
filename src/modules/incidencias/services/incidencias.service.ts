@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { enqueue } from '@/lib/offlineQueue'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
 
 // ── Tipos exportados ──────────────────────────────────────────────────────────
@@ -111,7 +112,22 @@ export const incidenciasService = {
     }
   },
 
-  async crear(datos: TablesInsert<'incidencias'>): Promise<Incidencia> {
+  async crear(datos: TablesInsert<'incidencias'>, integrante_ids?: string[]): Promise<Incidencia> {
+    if (!navigator.onLine) {
+      const tempId = crypto.randomUUID()
+      await enqueue({
+        table: 'incidencias',
+        operation: 'insert',
+        payload: { id: tempId, ...datos } as unknown as Record<string, unknown>,
+        integrante_ids,
+      })
+      return {
+        id: tempId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...datos,
+      } as unknown as Incidencia
+    }
     const { data, error } = await supabase
       .from('incidencias')
       .insert(datos)

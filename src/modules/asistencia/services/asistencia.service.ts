@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { enqueue } from '@/lib/offlineQueue'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
 
 export type EvalRegistro = Tables<'actividad_eval_registros'>
@@ -157,10 +158,24 @@ export const asistenciaService = {
   ): Promise<AsistenciaRegistro> {
     const payload: TablesInsert<'asistencia_registros'> = {
       ...datos,
-      // limpiar justificación si no aplica
       motivo_justificacion:
         datos.estado === 'justificado' ? datos.motivo_justificacion ?? null : null,
       documentado: datos.estado === 'justificado' ? (datos.documentado ?? false) : false,
+    }
+
+    if (!navigator.onLine) {
+      await enqueue({
+        table: 'asistencia_registros',
+        operation: 'upsert',
+        payload: payload as unknown as Record<string, unknown>,
+        conflictFields: 'actividad_id,integrante_id',
+      })
+      return {
+        id: crypto.randomUUID(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...payload,
+      } as unknown as AsistenciaRegistro
     }
 
     const { data, error } = await supabase
@@ -205,6 +220,20 @@ export const evalRegistrosService = {
   },
 
   async upsert(datos: TablesInsert<'actividad_eval_registros'>): Promise<EvalRegistro> {
+    if (!navigator.onLine) {
+      await enqueue({
+        table: 'actividad_eval_registros',
+        operation: 'upsert',
+        payload: datos as unknown as Record<string, unknown>,
+        conflictFields: 'criterio_eval_id,equipo_id,evaluador_id',
+      })
+      return {
+        id: crypto.randomUUID(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...datos,
+      } as unknown as EvalRegistro
+    }
     const { data, error } = await supabase
       .from('actividad_eval_registros')
       .upsert(datos, { onConflict: 'criterio_eval_id,equipo_id,evaluador_id' })

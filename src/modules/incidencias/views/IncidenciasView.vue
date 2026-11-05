@@ -1048,4 +1048,100 @@ function colorEquipo(id: string) {
   border-top: 1px solid #f1f5f9;
   flex-shrink: 0;
 }
+
+/* ════════════════════════════════════════
+   RESPONSIVE — móvil pequeño (< 380px)
+════════════════════════════════════════ */
+@media (max-width: 379px) {
+  .inc-page { padding: 0 0.65rem 2.5rem; gap: 0.75rem; }
+
+  .inc-title { font-size: 1.05rem; }
+  .inc-sub   { font-size: 0.7rem; }
+  .inc-header__icon-wrap { width: 38px; height: 38px; }
+
+  /* Stats apiladas en 1 columna */
+  .inc-stats { grid-template-columns: 1fr; }
+
+  /* Tabs más compactos */
+  .inc-tab { font-size: 0.72rem; padding: 0 0.25rem; min-height: 34px; }
+  .inc-tab-cnt { display: none; }
+
+  /* Filtro select ocupa toda la fila */
+  .inc-filtros { flex-direction: column; }
+  .inc-equipo-sel { width: 100%; }
+
+  /* Cards más compactas */
+  .inc-card { padding: 0.75rem 0.85rem; }
+  .inc-card__equipo { font-size: 0.8rem; }
+  .inc-card__hecho  { font-size: 0.8rem; }
+  .inc-card__meta   { font-size: 0.7rem; }
+  .inc-card__pts    { font-size: 0.84rem; }
+
+  /* Stat compacta */
+  .inc-stat { padding: 0.7rem 0.75rem; gap: 0.5rem; }
+  .inc-stat__icon-wrap { width: 34px; height: 34px; font-size: 0.9rem; }
+  .inc-stat__val { font-size: 0.95rem; }
+  .inc-stat__lbl { font-size: 0.64rem; }
+  .inc-stat__badge { display: none; }
+
+  /* Botón registrar más compacto */
+  .btn { font-size: 0.8rem; padding: 0.45rem 0.8rem; min-height: 38px; }
+}
+
+/* ════════════════════════════════════════
+   RESPONSIVE — móvil (380px – 639px)
+════════════════════════════════════════ */
+@media (min-width: 380px) and (max-width: 639px) {
+  .inc-page { padding: 0 0.9rem 2.5rem; }
+
+  /* Filtro: cuando el select no cabe, ocupa fila completa */
+  .inc-filtros { flex-wrap: wrap; }
+  .inc-equipo-sel { width: 100%; flex: none; }
+
+  /* Tabs ligeramente más pequeños */
+  .inc-tab { font-size: 0.75rem; }
+}
+
+/* ════════════════════════════════════════
+   RESPONSIVE — tablet (640px – 1023px)
+════════════════════════════════════════ */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .inc-page { padding: 0 1.5rem 3rem; max-width: 760px; }
+
+  .inc-stats { gap: 0.85rem; }
+  .inc-stat { padding: 1rem 1.1rem; }
+  .inc-stat__val { font-size: 1.15rem; }
+
+  .inc-filtros { flex-wrap: nowrap; }
+  .inc-equipo-sel { flex-shrink: 0; }
+
+  /* Cards con más respiro */
+  .inc-card { padding: 1rem 1.1rem; }
+  .inc-card__equipo { font-size: 0.9rem; }
+  .inc-card__hecho  { font-size: 0.88rem; }
+
+  /* Header más espacioso */
+  .inc-title { font-size: 1.35rem; }
+  .inc-sub   { font-size: 0.8rem; }
+}
+
+/* ════════════════════════════════════════
+   RESPONSIVE — días: scroll horizontal en móvil
+════════════════════════════════════════ */
+@media (max-width: 639px) {
+  .inc-dias-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    justify-content: flex-start;
+    padding-bottom: 2px;
+  }
+  .inc-dias-wrap::-webkit-scrollbar { display: none; }
+  .inc-dias {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    padding: 0 0.1rem;
+  }
+  .inc-dia-btn { flex-shrink: 0; }
+}
 </style>

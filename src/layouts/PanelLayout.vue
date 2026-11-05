@@ -3,6 +3,8 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
 import { useSessionStore }    from '@/modules/auth/store'
 import { useCampamentoStore } from '@/stores/campamento'
+import SyncStatus             from '@/components/ui/SyncStatus.vue'
+import { initOfflineQueue }   from '@/lib/offlineQueue'
 
 const session   = useSessionStore()
 const campStore = useCampamentoStore()
@@ -12,7 +14,10 @@ const route     = useRoute()
 const menuAbierto      = ref(false)
 const sidebarCollapsed = ref(false)
 
-onMounted(async () => { await campStore.cargar() })
+onMounted(async () => {
+  await campStore.cargar()
+  initOfflineQueue()
+})
 
 const iniciales = computed(() => {
   const n = session.perfil?.nombre_completo ?? ''
@@ -112,6 +117,7 @@ function navegar(to: string)  { menuAbierto.value = false; router.push(to) }
         <i class="pi pi-bars" />
       </button>
       <span class="topbar__brand">🏕 LiderCamp 2026-II</span>
+      <SyncStatus />
       <div class="topbar__avatar">{{ iniciales }}</div>
     </header>
 
