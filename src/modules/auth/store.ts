@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { perfilesService, type Perfil } from './services/perfiles.service'
+import { cacheSet, cacheGet } from '@/lib/localCache'
 
 export const useSessionStore = defineStore('session', () => {
   const user = ref<User | null>(null)
@@ -28,10 +29,22 @@ export const useSessionStore = defineStore('session', () => {
       perfil.value = null
       return
     }
+
+    const cacheKey = `perfil_${user.value.id}`
+
+    if (!navigator.onLine) {
+      // Sin internet: leer desde caché para no bloquear el arranque
+      perfil.value = cacheGet<Perfil>(cacheKey)
+      return
+    }
+
     try {
-      perfil.value = await perfilesService.getMiPerfil()
+      const p = await perfilesService.getMiPerfil()
+      perfil.value = p
+      if (p) cacheSet(cacheKey, p)
     } catch {
-      perfil.value = null
+      // Red falló (ej. token expirado): usar caché como respaldo
+      perfil.value = cacheGet<Perfil>(cacheKey)
     }
   }
 

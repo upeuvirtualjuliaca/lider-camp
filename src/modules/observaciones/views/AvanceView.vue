@@ -194,7 +194,8 @@ async function cargarDatosDia() {
           // Sumar promedios por equipo
           const totales: Record<string, number> = {}
           for (const [key, puntajes] of byKey) {
-            const equipoId = key.split('|')[1]
+            const equipoId = key.split('|')[1] ?? ''
+            if (!equipoId) continue
             const avg = puntajes.reduce((a, b) => a + b, 0) / puntajes.length
             totales[equipoId] = (totales[equipoId] ?? 0) + avg
           }

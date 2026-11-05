@@ -1,11 +1,3 @@
-Warning: --db-url is deprecated and will be removed in v4. Use --remote=<db-url> instead, or --remote=arnxtzamayflzptlkwxy with an access token set
-WARN: auth.email.enable_signup is deprecated and will be removed in v4, use auth.email.enabled instead.
-WARN: auth.sms.enable_signup is deprecated and will be removed in v4, use auth.sms.enabled instead.
-Target: custom Postgres (aws-0-us-east-2.pooler.supabase.com:5432)
-Connecting to aws-0-us-east-2.pooler.supabase.com 5432
-Generated TypeScript is unformatted. Format it with:
-  npx oxfmt <generated-file.ts>
-
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {

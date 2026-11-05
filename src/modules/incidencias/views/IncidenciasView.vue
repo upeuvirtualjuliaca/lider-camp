@@ -46,12 +46,12 @@ const hoy = computed(() => {
 // ── Fecha de inicio del campamento (primer día en dias_campamento) ─────────────
 const fechaInicio = computed(() => {
   if (momentos.value.length === 0) return null
-  return fechas.value[momentos.value[0]] ?? null
+  return fechas.value[momentos.value[0] ?? ''] ?? null
 })
 
 const labelFechaInicio = computed(() => {
   if (!fechaInicio.value) return ''
-  return labelDia(momentos.value[0])
+  return labelDia(momentos.value[0] ?? '')
 })
 
 // ── Regla: puede registrar desde el 1er día EXCEPTO el último ─────────────────
@@ -59,16 +59,16 @@ const labelFechaInicio = computed(() => {
 // accesibles via useDiasCampamento → momentos (ordenados por 'orden')
 const puedeRegistrar = computed(() => {
   if (momentos.value.length === 0) return false
-  const primerFecha = fechas.value[momentos.value[0]]
-  const ultimaFecha = fechas.value[momentos.value[momentos.value.length - 1]]
+  const primerFecha = fechas.value[momentos.value[0] ?? '']
+  const ultimaFecha = fechas.value[momentos.value[momentos.value.length - 1] ?? '']
   if (!primerFecha || !ultimaFecha) return false
   return hoy.value >= primerFecha && hoy.value < ultimaFecha
 })
 
 const motivoNoRegistrar = computed(() => {
   if (momentos.value.length === 0) return ''
-  const primerFecha = fechas.value[momentos.value[0]]
-  const ultimaFecha = fechas.value[momentos.value[momentos.value.length - 1]]
+  const primerFecha = fechas.value[momentos.value[0] ?? '']
+  const ultimaFecha = fechas.value[momentos.value[momentos.value.length - 1] ?? '']
   if (!primerFecha || !ultimaFecha) return ''
   if (hoy.value < primerFecha) return 'El campamento aún no ha comenzado.'
   if (hoy.value >= ultimaFecha) return 'No se pueden registrar incidencias el último día del campamento.'

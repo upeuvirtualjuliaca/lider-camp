@@ -54,7 +54,7 @@ export interface PublicoRankingDia {
 
 export const rankingDiarioPublicoService = {
   async getAll(campamentoId?: string): Promise<PublicoRankingDia[]> {
-    let q = supabase
+    let q = (supabase as any)
       .from('publico_ranking_dia')
       .select('*')
       .order('momento')
@@ -84,7 +84,7 @@ export interface PublicoRankingTotal {
 
 export const rankingTotalPublicoService = {
   async getAll(campamentoId?: string): Promise<PublicoRankingTotal[]> {
-    let q = supabase
+    let q = (supabase as any)
       .from('publico_ranking_total')
       .select('equipo_id,campamento_id,equipo_nombre,equipo_color,pts_rubrica,pts_actividades,pts_bonus,pts_demeritos,pts_bruto,pts_escala,medalla,posicion')
       .order('posicion')

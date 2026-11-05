@@ -60,7 +60,7 @@ async function onArchivo(e: Event) {
 
     // Detectar fila de cabecera: buscar la primera fila que contenga "ALUMNO"
     let inicioData = 0
-    const primeraFila = filas[0].map((c) => c.toUpperCase())
+    const primeraFila = filas[0]!.map((c) => c.toUpperCase())
     if (primeraFila.some((c) => c.includes('NOMBRES') || c.includes('CODIGO'))) {
       // Verificar que las cabeceras esperadas estén presentes
       const faltantes = CABECERAS_ESPERADAS.filter(
@@ -141,7 +141,7 @@ function procesarFilas(
         nombres,
         apellidos,
         codigo_universitario: codigo,
-        fecha_inscripcion:    hoy,
+        fecha_inscripcion:    hoy as string,
         observaciones:        extra || null,
         _alumno:              nombreCompleto,
         _prog:                [facultad, programa].filter(Boolean).join(' · ') || '—',

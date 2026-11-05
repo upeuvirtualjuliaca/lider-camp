@@ -122,7 +122,8 @@ async function cargarDatosDia(momento: string) {
           byKey.get(key)!.push(Number(r.puntaje))
         }
         for (const [key, puntajes] of byKey) {
-          const equipoId = key.split('|')[1]
+          const equipoId = key.split('|')[1] ?? ''
+          if (!equipoId) continue
           const avg = puntajes.reduce((a, b) => a + b, 0) / puntajes.length
           actPts[equipoId] = (actPts[equipoId] ?? 0) + avg
         }
@@ -195,12 +196,13 @@ async function cargarTotal() {
       )
 
       for (const eq of activos) {
-        if (!acum[eq.id]) continue
-        acum[eq.id].rub += Number(puntajesDia.find((p) => p.equipo_id === eq.id)?.suma_puntaje ?? 0)
-        acum[eq.id].act += actPts[eq.id] ?? 0
+        const fila = acum[eq.id]
+        if (!fila) continue
+        fila.rub += Number(puntajesDia.find((p) => p.equipo_id === eq.id)?.suma_puntaje ?? 0)
+        fila.act += actPts[eq.id] ?? 0
         for (const inc of incData.filter((i) => i.equipo_id === eq.id)) {
-          if (inc.tipo === 'bonus')    acum[eq.id].bon += inc.puntos
-          if (inc.tipo === 'demerito') acum[eq.id].dem += inc.puntos
+          if (inc.tipo === 'bonus')    fila.bon += inc.puntos
+          if (inc.tipo === 'demerito') fila.dem += inc.puntos
         }
       }
     }),

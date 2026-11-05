@@ -43,7 +43,7 @@ const hoy = computed(() => { const d = new Date(); return `${d.getFullYear()}-${
 // Días con programación ya disponibles (fecha ≤ hoy)
 const momentosDisponibles = computed(() =>
   momentos.value.filter(m =>
-    momentosConEvaluacion.value.includes(m) && fechas.value[m] <= hoy.value
+    momentosConEvaluacion.value.includes(m) && (fechas.value[m] ?? '') <= hoy.value
   )
 )
 
@@ -58,7 +58,7 @@ const momentosSelector = computed<string[]>(() =>
 
 // Días con programación aún por llegar (fecha > hoy)
 const momentosFuturos = computed(() =>
-  momentos.value.filter(m => momentosConEvaluacion.value.includes(m) && fechas.value[m] > hoy.value)
+  momentos.value.filter(m => momentosConEvaluacion.value.includes(m) && (fechas.value[m] ?? '') > hoy.value)
 )
 
 // Próximo día a evaluar

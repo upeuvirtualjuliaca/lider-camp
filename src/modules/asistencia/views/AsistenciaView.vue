@@ -579,8 +579,8 @@ function filaClass(fila: FilaIntegrante) {
               'ast-dia-card--locked':    dias.find((d) => d.momento === m)?.cerrado,
               'ast-dia-card--sin-act':   !conteosActividades[m],
               'ast-dia-card--hoy':       fechas[m] === hoy,
-              'ast-dia-card--futuro':    fechas[m] > hoy,
-              'ast-dia-card--pasado':    fechas[m] < hoy,
+              'ast-dia-card--futuro':    (fechas[m] ?? '') > hoy,
+              'ast-dia-card--pasado':    (fechas[m] ?? '') < hoy,
             }"
             @click="seleccionarDia(m)"
           >
