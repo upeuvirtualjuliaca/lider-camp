@@ -41,18 +41,20 @@ export type RegistroConIntegrante = AsistenciaRegistro & {
 // ── actividadesService ────────────────────────────────────────────────────────
 export const actividadesService = {
   async getConteosPorCampamento(campamentoId: string): Promise<Record<string, number>> {
-    const { data, error } = await supabase
-      .from('actividades')
-      .select('programacion!inner(momento, campamento_id)')
-      .eq('programacion.campamento_id', campamentoId)
-      .neq('estado', 'cancelada')
-    if (error) throw error
-    const conteo: Record<string, number> = {}
-    for (const a of data ?? []) {
-      const m = (a.programacion as any)?.momento as string | undefined
-      if (m) conteo[m] = (conteo[m] ?? 0) + 1
-    }
-    return conteo
+    return cachedFetch(`actividades_conteos_${campamentoId}`, async () => {
+      const { data, error } = await supabase
+        .from('actividades')
+        .select('programacion!inner(momento, campamento_id)')
+        .eq('programacion.campamento_id', campamentoId)
+        .neq('estado', 'cancelada')
+      if (error) throw error
+      const conteo: Record<string, number> = {}
+      for (const a of data ?? []) {
+        const m = (a.programacion as any)?.momento as string | undefined
+        if (m) conteo[m] = (conteo[m] ?? 0) + 1
+      }
+      return conteo
+    }, TTL_1H)
   },
 
   async getPorDia(momento: string): Promise<ActividadConProgramacion[]> {
@@ -116,13 +118,15 @@ export type CriterioEval = Tables<'actividad_criterios_eval'>
 
 export const criteriosEvalService = {
   async getPorActividad(actividadId: string): Promise<CriterioEval[]> {
-    const { data, error } = await supabase
-      .from('actividad_criterios_eval')
-      .select('*')
-      .eq('actividad_id', actividadId)
-      .order('orden')
-    if (error) throw error
-    return data ?? []
+    return cachedFetch(`criterios_eval_${actividadId}`, async () => {
+      const { data, error } = await supabase
+        .from('actividad_criterios_eval')
+        .select('*')
+        .eq('actividad_id', actividadId)
+        .order('orden')
+      if (error) throw error
+      return data ?? []
+    }, TTL_1H)
   },
 
   async guardar(actividadId: string, criterios: { nombre: string; puntaje_max: number; orden: number }[]): Promise<void> {
@@ -145,12 +149,14 @@ export const criteriosEvalService = {
 // ── asistenciaService ────────────────────────────────────────────────────────
 export const asistenciaService = {
   async getRegistrosPorActividad(actividad_id: string): Promise<RegistroConIntegrante[]> {
-    const { data, error } = await supabase
-      .from('asistencia_registros')
-      .select('*, integrantes(id, nombres, apellidos, equipo_id)')
-      .eq('actividad_id', actividad_id)
-    if (error) throw error
-    return (data ?? []) as RegistroConIntegrante[]
+    return cachedFetch(`asistencia_registros_${actividad_id}`, async () => {
+      const { data, error } = await supabase
+        .from('asistencia_registros')
+        .select('*, integrantes(id, nombres, apellidos, equipo_id)')
+        .eq('actividad_id', actividad_id)
+      if (error) throw error
+      return (data ?? []) as RegistroConIntegrante[]
+    }, TTL_1H)
   },
 
   async upsert(
@@ -188,35 +194,42 @@ export const asistenciaService = {
   },
 
   async getResumenPorActividad(actividad_id: string): Promise<AsistenciaEquipoActividad[]> {
-    const { data, error } = await supabase
-      .from('v_asistencia_equipo_actividad')
-      .select('*')
-      .eq('actividad_id', actividad_id)
-    if (error) throw error
-    return data ?? []
+    return cachedFetch(`asistencia_resumen_act_${actividad_id}`, async () => {
+      const { data, error } = await supabase
+        .from('v_asistencia_equipo_actividad')
+        .select('*')
+        .eq('actividad_id', actividad_id)
+      if (error) throw error
+      return data ?? []
+    }, TTL_1H)
   },
 
   async getResumenPorDia(momento: string): Promise<AsistenciaEquipoDia[]> {
-    const { data, error } = await supabase
-      .from('v_asistencia_equipo_dia')
-      .select('*')
-      .eq('momento', momento)
-    if (error) throw error
-    return data ?? []
+    return cachedFetch(`asistencia_resumen_dia_${momento}`, async () => {
+      const { data, error } = await supabase
+        .from('v_asistencia_equipo_dia')
+        .select('*')
+        .eq('momento', momento)
+      if (error) throw error
+      return data ?? []
+    }, TTL_1H)
   },
 }
 
 // ── evalRegistrosService ─────────────────────────────────────────────────────
 export const evalRegistrosService = {
   async getPorActividad(actividadId: string, evaluador_id?: string): Promise<EvalRegistro[]> {
-    let q = supabase
-      .from('actividad_eval_registros')
-      .select('*')
-      .eq('actividad_id', actividadId)
-    if (evaluador_id) q = q.eq('evaluador_id', evaluador_id)
-    const { data, error } = await q
-    if (error) throw error
-    return data ?? []
+    const key = `eval_registros_${actividadId}_${evaluador_id ?? 'all'}`
+    return cachedFetch(key, async () => {
+      let q = supabase
+        .from('actividad_eval_registros')
+        .select('*')
+        .eq('actividad_id', actividadId)
+      if (evaluador_id) q = q.eq('evaluador_id', evaluador_id)
+      const { data, error } = await q
+      if (error) throw error
+      return data ?? []
+    }, TTL_1H)
   },
 
   async upsert(datos: TablesInsert<'actividad_eval_registros'>): Promise<EvalRegistro> {

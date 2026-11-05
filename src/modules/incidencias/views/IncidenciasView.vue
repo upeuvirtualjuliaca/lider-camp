@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useSessionStore } from '@/modules/auth/store'
 import { useCampamentoStore } from '@/stores/campamento'
 import { useDiasCampamento } from '@/composables/useDiasCampamento'
+import { cachedFetch, TTL_1H } from '@/lib/localCache'
 import {
   incidenciasService,
   codigosService,
@@ -55,8 +56,6 @@ const labelFechaInicio = computed(() => {
 })
 
 // ── Regla: puede registrar desde el 1er día EXCEPTO el último ─────────────────
-// Los días del campamento vienen de dias_campamento (configurados en /panel/campamento)
-// accesibles via useDiasCampamento → momentos (ordenados por 'orden')
 const puedeRegistrar = computed(() => {
   if (momentos.value.length === 0) return false
   const primerFecha = fechas.value[momentos.value[0] ?? '']
@@ -77,6 +76,8 @@ const motivoNoRegistrar = computed(() => {
 
 // ── Carga inicial ─────────────────────────────────────────────────────────────
 async function cargar() {
+  if (codigos.value.length > 0 && equipos.value.length > 0 && !navigator.onLine) return
+
   cargando.value = true
   error.value = ''
   try {
@@ -88,14 +89,18 @@ async function cargar() {
       bonusService.getResumen(campStore.selectedId),
       demeritorService.getResumen(campStore.selectedId),
     ])
-    const { supabase } = await import('@/lib/supabase')
     if (campStore.selectedId) {
-      const { data: progData } = await supabase
-        .from('programacion')
-        .select('momento')
-        .eq('campamento_id', campStore.selectedId)
-        .eq('estado', 'programado')
-      momentosConProg.value = [...new Set((progData ?? []).map((r: any) => r.momento as string))]
+      const campId = campStore.selectedId
+      const momentos = await cachedFetch<string[]>(`prog_momentos_${campId}`, async () => {
+        const { supabase } = await import('@/lib/supabase')
+        const { data: progData } = await supabase
+          .from('programacion')
+          .select('momento')
+          .eq('campamento_id', campId)
+          .eq('estado', 'programado')
+        return [...new Set((progData ?? []).map((r: any) => r.momento as string))]
+      }, TTL_1H)
+      momentosConProg.value = momentos
     }
     momentoActivo.value = detectarMomentoActual()
     lista.value     = inc
@@ -151,10 +156,10 @@ const bonusCodigos    = computed(() => codigos.value.filter(c => c.tipo === 'bon
 const demeritoCodigos = computed(() => codigos.value.filter(c => c.tipo === 'demerito'))
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const ESTADO_CFG: Record<string, { label: string; cls: string; icon: string }> = {
-  registrado: { label: 'Pendiente', cls: 'badge--amber',  icon: 'pi-clock' },
-  validado:   { label: 'Validado',  cls: 'badge--verde',  icon: 'pi-check-circle' },
-  rechazado:  { label: 'Rechazado', cls: 'badge--rojo',   icon: 'pi-times-circle' },
+const ESTADO_CFG: Record<string, { label: string; cls: string }> = {
+  registrado: { label: 'Pendiente', cls: 'st--amber' },
+  validado:   { label: 'Validado',  cls: 'st--green' },
+  rechazado:  { label: 'Rechazado', cls: 'st--red'   },
 }
 
 function nombreEquipo(id: string) {
@@ -169,129 +174,109 @@ function colorEquipo(id: string) {
 <template>
   <div class="inc-page">
 
-    <!-- ══════════════════════════════════════════
-         HEADER
-    ══════════════════════════════════════════ -->
-    <header class="inc-header">
-      <div class="inc-header__left">
-        <div class="inc-header__icon-wrap">
-          <i class="pi pi-bolt inc-header__icon" />
-        </div>
-        <div>
-          <h1 class="inc-title">Incidencias</h1>
-          <p class="inc-sub">Bonus y deméritos del campamento</p>
-        </div>
-      </div>
-      <div class="inc-header__actions">
-        <button class="btn-ayuda" title="¿Cómo funciona?" @click="modalOpen = true">
+    <!-- ══════════ TOPBAR ══════════ -->
+    <div class="inc-topbar">
+      <div class="inc-topbar__left"></div>
+      <div class="inc-topbar__right">
+        <button class="inc-btn-help" title="¿Cómo funciona?" @click="modalOpen = true">
           <i class="pi pi-question-circle" />
         </button>
         <router-link
           v-if="puedeRegistrar"
           :to="`/panel/incidencias/nueva${momentoActivo && fechas[momentoActivo] ? '?fecha=' + fechas[momentoActivo] : ''}`"
-          class="btn btn--primary"
+          class="inc-btn-new"
         >
           <i class="pi pi-plus" /> Registrar
         </router-link>
-        <span v-else-if="!cargando" class="btn btn--disabled" :title="motivoNoRegistrar">
+        <span v-else-if="!cargando" class="inc-btn-new inc-btn-new--off" :title="motivoNoRegistrar">
           <i class="pi pi-lock" /> Registrar
-        </span>
-      </div>
-    </header>
-
-    <!-- ── Aviso cuando no se puede registrar ── -->
-    <div v-if="!cargando && motivoNoRegistrar" class="inc-aviso-bloqueo">
-      <i class="pi pi-info-circle inc-aviso-bloqueo__icon" />
-      <div>
-        <span>{{ motivoNoRegistrar }}</span>
-        <span v-if="fechaInicio && hoy < fechaInicio" class="inc-aviso-bloqueo__fecha">
-          Inicio del campamento: <strong>{{ labelFechaInicio }}</strong> ({{ fechaInicio }})
         </span>
       </div>
     </div>
 
-    <!-- ══════════════════════════════════════════
-         SELECTOR DE DÍAS
-    ══════════════════════════════════════════ -->
+    <!-- ══════════ AVISO BLOQUEO ══════════ -->
+    <div v-if="!cargando && motivoNoRegistrar" class="inc-aviso">
+      <i class="pi pi-info-circle" />
+      <div>
+        <span>{{ motivoNoRegistrar }}</span>
+        <span v-if="fechaInicio && hoy < fechaInicio" class="inc-aviso__fecha">
+          Inicio: <strong>{{ labelFechaInicio }}</strong> ({{ fechaInicio }})
+        </span>
+      </div>
+    </div>
+
+    <!-- ══════════ SELECTOR DE DÍAS ══════════ -->
     <div v-if="momentos.length" class="inc-dias-wrap">
       <div class="inc-dias">
         <button
           v-for="m in momentos.slice(0, -1)"
           :key="m"
-          class="inc-dia-btn"
-          :class="{ 'inc-dia-btn--active': momentoActivo === m }"
+          class="inc-dia"
+          :class="{ 'inc-dia--on': momentoActivo === m }"
           @click="momentoActivo = m"
         >
-          <span class="inc-dia-btn__label">{{ labelDia(m) }}</span>
-          <span v-if="fechas[m] === hoy" class="inc-dia-btn__hoy">HOY</span>
+          <span class="inc-dia__nombre">{{ labelDia(m) }}</span>
+          <span v-if="fechas[m] === hoy" class="inc-dia__hoy">HOY</span>
         </button>
       </div>
     </div>
 
-    <!-- Cargando / Error -->
-    <div v-if="cargando" class="inc-empty">
-      <div class="inc-spinner"><i class="pi pi-spin pi-spinner" /></div>
+    <!-- ══════════ CARGANDO / ERROR ══════════ -->
+    <div v-if="cargando" class="inc-estado">
+      <div class="inc-estado__ring"><i class="pi pi-spin pi-spinner" /></div>
       <span>Cargando incidencias...</span>
     </div>
-    <div v-else-if="error" class="inc-empty inc-empty--error">
-      <i class="pi pi-exclamation-circle" style="font-size:1.5rem" />
+    <div v-else-if="error" class="inc-estado inc-estado--error">
+      <i class="pi pi-exclamation-circle" style="font-size:1.4rem" />
       <span>{{ error }}</span>
     </div>
 
     <template v-else>
 
-      <!-- ══════════════════════════════════════════
-           STATS: Bonus / Deméritos
-      ══════════════════════════════════════════ -->
+      <!-- ══════════ STATS ══════════ -->
       <div class="inc-stats">
         <div class="inc-stat inc-stat--bonus">
-          <div class="inc-stat__icon-wrap inc-stat__icon-wrap--bonus">
+          <div class="inc-stat__ic-wrap">
             <i class="pi pi-star-fill" />
           </div>
           <div class="inc-stat__body">
-            <span class="inc-stat__val">+{{ bonusPts }} pts</span>
-            <span class="inc-stat__lbl">Bonus aplicados</span>
+            <span class="inc-stat__num">{{ cntBonus }}</span>
+            <span class="inc-stat__lbl">Bonus hoy</span>
           </div>
-          <span class="inc-stat__badge">{{ cntBonus }} hoy</span>
+          <span class="inc-stat__pts inc-stat__pts--bonus">+{{ bonusPts }} pts</span>
         </div>
 
-        <div class="inc-stat inc-stat--demerito">
-          <div class="inc-stat__icon-wrap inc-stat__icon-wrap--demerito">
+        <div class="inc-stat inc-stat--deme">
+          <div class="inc-stat__ic-wrap">
             <i class="pi pi-exclamation-triangle" />
           </div>
           <div class="inc-stat__body">
-            <span class="inc-stat__val">{{ demeList.length }} total</span>
-            <span class="inc-stat__lbl">Deméritos registrados</span>
+            <span class="inc-stat__num">{{ cntDemerito }}</span>
+            <span class="inc-stat__lbl">Deméritos hoy</span>
           </div>
-          <span class="inc-stat__badge inc-stat__badge--demerito">{{ cntDemerito }} hoy</span>
+          <span class="inc-stat__pts inc-stat__pts--deme">−{{ demeritoPts }} pts</span>
         </div>
       </div>
 
-      <!-- ══════════════════════════════════════════
-           FILTROS
-      ══════════════════════════════════════════ -->
+      <!-- ══════════ FILTROS ══════════ -->
       <div class="inc-filtros">
-        <div class="inc-tabs">
-          <button
-            v-for="tab in [
-              { v: 'todas',     label: 'Todas',      cnt: listaDia.length },
-              { v: 'bonus',     label: 'Bonus',      cnt: cntBonus        },
-              { v: 'demerito',  label: 'Deméritos',  cnt: cntDemerito     },
-              { v: 'pendiente', label: 'Pendientes', cnt: cntPendiente    },
-            ]"
-            :key="tab.v"
-            :class="[
-              'inc-tab',
-              filtTab === tab.v && 'inc-tab--active',
-              tab.v === 'bonus'     && filtTab === tab.v && 'inc-tab--bonus',
-              tab.v === 'demerito'  && filtTab === tab.v && 'inc-tab--demerito',
-              tab.v === 'pendiente' && filtTab === tab.v && 'inc-tab--amber',
-            ]"
-            @click="filtTab = tab.v as any"
-          >
-            {{ tab.label }}
-            <span v-if="tab.cnt > 0" class="inc-tab-cnt">{{ tab.cnt }}</span>
-          </button>
+        <div class="inc-tabs-scroll">
+          <div class="inc-tabs">
+            <button
+              v-for="tab in [
+                { v: 'todas',     label: 'Todas',      cnt: listaDia.length },
+                { v: 'bonus',     label: 'Bonus',      cnt: cntBonus        },
+                { v: 'demerito',  label: 'Deméritos',  cnt: cntDemerito     },
+                { v: 'pendiente', label: 'Pendientes', cnt: cntPendiente    },
+              ]"
+              :key="tab.v"
+              :class="['inc-tab', filtTab === tab.v && 'inc-tab--on', filtTab === tab.v && `inc-tab--${tab.v}`]"
+              @click="filtTab = tab.v as any"
+            >
+              {{ tab.label }}
+              <span v-if="tab.cnt > 0" class="inc-tab__cnt">{{ tab.cnt }}</span>
+            </button>
+          </div>
         </div>
 
         <select v-if="equipos.length > 1" v-model="filtEquipo" class="inc-equipo-sel">
@@ -300,32 +285,24 @@ function colorEquipo(id: string) {
         </select>
       </div>
 
-      <!-- ══════════════════════════════════════════
-           LISTA
-      ══════════════════════════════════════════ -->
+      <!-- ══════════ LISTA ══════════ -->
       <div v-if="listaFiltrada.length" class="inc-lista">
         <div
           v-for="inc in listaFiltrada"
           :key="inc.id"
-          :class="['inc-card', tipoDe(inc.codigo) === 'bonus' ? 'inc-card--bonus' : 'inc-card--demerito']"
+          :class="['inc-card', tipoDe(inc.codigo) === 'bonus' ? 'inc-card--bonus' : 'inc-card--deme']"
           @click="router.push(`/panel/incidencias/${inc.id}`)"
         >
-          <!-- Fila superior: código + equipo + estado -->
-          <div class="inc-card__top">
-            <span :class="['inc-card__codigo', tipoDe(inc.codigo) === 'bonus' ? 'inc-card__codigo--bonus' : 'inc-card__codigo--demerito']">
+          <!-- Fila superior -->
+          <div class="inc-card__head">
+            <span :class="['inc-cod', tipoDe(inc.codigo) === 'bonus' ? 'inc-cod--b' : 'inc-cod--d']">
               {{ inc.codigo }}
             </span>
-
-            <div class="inc-card__equipo-wrap">
-              <span
-                class="inc-card__equipo-dot"
-                :style="{ background: colorEquipo(inc.equipo_id) }"
-              />
-              <span class="inc-card__equipo">{{ nombreEquipo(inc.equipo_id) }}</span>
+            <div class="inc-card__equipo">
+              <span class="inc-card__dot" :style="{ background: colorEquipo(inc.equipo_id) }" />
+              <span class="inc-card__eq">{{ nombreEquipo(inc.equipo_id) }}</span>
             </div>
-
-            <span :class="['badge', ESTADO_CFG[inc.estado]?.cls ?? 'badge--amber']">
-              <i :class="['pi', ESTADO_CFG[inc.estado]?.icon ?? 'pi-clock']" style="font-size:0.6rem" />
+            <span :class="['inc-st', ESTADO_CFG[inc.estado]?.cls ?? 'st--amber']">
               {{ ESTADO_CFG[inc.estado]?.label ?? inc.estado }}
             </span>
           </div>
@@ -333,53 +310,47 @@ function colorEquipo(id: string) {
           <!-- Hecho -->
           <p class="inc-card__hecho">{{ inc.hecho }}</p>
 
-          <!-- Pie: fecha + puntos -->
+          <!-- Pie -->
           <div class="inc-card__foot">
             <span class="inc-card__meta">
-              <i class="pi pi-calendar" style="font-size:0.65rem" />
+              <i class="pi pi-calendar" />
               {{ inc.fecha }} · {{ inc.hora.slice(0, 5) }}
             </span>
-            <span :class="['inc-card__pts', tipoDe(inc.codigo) === 'bonus' ? 'pts--bonus' : 'pts--demerito']">
+            <span :class="['inc-card__pts', tipoDe(inc.codigo) === 'bonus' ? 'pts--b' : 'pts--d']">
               {{ tipoDe(inc.codigo) === 'bonus' ? '+' : '−' }}{{ inc.puntos }} pts
             </span>
           </div>
         </div>
       </div>
 
-      <!-- ── Vacío ── -->
-      <div v-else class="inc-empty">
-        <div class="inc-empty__icon">
-          <i class="pi pi-inbox" />
-        </div>
-        <p class="inc-empty__title">Sin incidencias</p>
-        <p class="inc-empty__sub">
-          {{ filtTab === 'pendiente' ? 'No hay incidencias pendientes de validación.' :
-             filtTab !== 'todas'     ? `No hay incidencias de tipo "${filtTab}" para este día.` :
-             'Aún no hay incidencias registradas para este día.' }}
+      <!-- Vacío -->
+      <div v-else class="inc-vacio">
+        <div class="inc-vacio__ic"><i class="pi pi-inbox" /></div>
+        <p class="inc-vacio__title">Sin incidencias</p>
+        <p class="inc-vacio__sub">
+          {{
+            filtTab === 'pendiente' ? 'No hay incidencias pendientes de validación.' :
+            filtTab !== 'todas'     ? `No hay incidencias de tipo "${filtTab}" para este día.` :
+            'Aún no hay incidencias registradas para este día.'
+          }}
         </p>
       </div>
 
     </template>
-
   </div>
 
-  <!-- ═══════════════════════════════════════════════════════════
+  <!-- ═══════════════════════════════════════════════
        MODAL ¿Cómo funciona?
-  ═══════════════════════════════════════════════════════════ -->
+  ═══════════════════════════════════════════════ -->
   <Teleport to="body">
-    <Transition
-      enter-active-class="m-enter-active"
-      leave-active-class="m-leave-active"
-      enter-from-class="m-from"
-      leave-to-class="m-from"
-    >
+    <Transition enter-active-class="m-in" leave-active-class="m-in" enter-from-class="m-from" leave-to-class="m-from">
       <div v-if="modalOpen" class="m-overlay">
         <div class="m-backdrop" @click="modalOpen = false" />
-
         <div class="m-panel">
+
           <div class="m-head">
             <div class="m-head__left">
-              <div class="m-icon"><i class="pi pi-question-circle" /></div>
+              <div class="m-ic"><i class="pi pi-question-circle" /></div>
               <h2 class="m-title">¿Cómo funciona?</h2>
             </div>
             <button class="m-close" @click="modalOpen = false"><i class="pi pi-times" /></button>
@@ -392,13 +363,11 @@ function colorEquipo(id: string) {
               Solo cuentan una vez que el admin las <strong>valida</strong>.
             </p>
 
-            <!-- Regla de registro -->
             <div class="m-regla">
               <i class="pi pi-calendar-clock" />
-              <span>Se pueden registrar desde el <strong>primer día</strong> del campamento hasta el <strong>penúltimo día</strong> inclusive.</span>
+              <span>Se pueden registrar desde el <strong>primer día</strong> hasta el <strong>penúltimo día</strong> inclusive.</span>
             </div>
 
-            <!-- Flujo -->
             <div class="m-pasos">
               <div class="m-paso">
                 <div class="m-paso__n">1</div>
@@ -423,11 +392,10 @@ function colorEquipo(id: string) {
               </div>
             </div>
 
-            <!-- Bonus -->
             <p class="m-sec m-sec--bonus"><i class="pi pi-star-fill" /> Bonus</p>
             <div class="m-codigos">
               <div v-for="c in bonusCodigos" :key="c.codigo" class="m-codigo">
-                <span class="badge badge--azul">{{ c.codigo }}</span>
+                <span class="m-cod m-cod--b">{{ c.codigo }}</span>
                 <div class="m-codigo__info">
                   <strong>{{ c.nombre }}</strong>
                   <span>{{ c.puntos }} pts{{ c.por_persona ? '/persona' : '' }}
@@ -438,11 +406,10 @@ function colorEquipo(id: string) {
               </div>
             </div>
 
-            <!-- Deméritos -->
-            <p class="m-sec m-sec--demerito"><i class="pi pi-exclamation-triangle" /> Deméritos</p>
+            <p class="m-sec m-sec--deme"><i class="pi pi-exclamation-triangle" /> Deméritos</p>
             <div class="m-codigos">
               <div v-for="c in demeritoCodigos" :key="c.codigo" class="m-codigo">
-                <span class="badge badge--naranja">{{ c.codigo }}</span>
+                <span class="m-cod m-cod--d">{{ c.codigo }}</span>
                 <div class="m-codigo__info">
                   <strong>{{ c.nombre }}</strong>
                   <span>{{ c.puntos }} pts{{ c.por_persona ? '/persona' : '' }}
@@ -452,31 +419,23 @@ function colorEquipo(id: string) {
               </div>
             </div>
 
-            <!-- Estados -->
             <div class="m-estados">
               <p class="m-estados__tit">Estados</p>
-              <div class="m-est-fila">
-                <span class="badge badge--amber">Pendiente</span>
-                <span>Esperando que el admin revise</span>
-              </div>
-              <div class="m-est-fila">
-                <span class="badge badge--verde">Validado</span>
-                <span>Confirmado — ya aplica al puntaje</span>
-              </div>
-              <div class="m-est-fila">
-                <span class="badge badge--rojo">Rechazado</span>
-                <span>No procede — no afecta el puntaje</span>
-              </div>
+              <div class="m-est-row"><span class="inc-st st--amber">Pendiente</span><span>Esperando revisión del admin</span></div>
+              <div class="m-est-row"><span class="inc-st st--green">Validado</span><span>Confirmado — aplica al puntaje</span></div>
+              <div class="m-est-row"><span class="inc-st st--red">Rechazado</span><span>No procede — no afecta el puntaje</span></div>
             </div>
 
             <div class="m-nota">
               <i class="pi pi-info-circle" />
-              <span>Un solo demérito por episodio. No se descuenta dos veces. El puntaje mínimo del equipo es 0.</span>
+              <span>Un solo demérito por episodio. El puntaje mínimo del equipo es 0.</span>
             </div>
           </div>
 
           <div class="m-foot">
-            <button class="btn btn--primary btn--full" @click="modalOpen = false">Entendido</button>
+            <button class="inc-btn-new" style="width:100%;justify-content:center" @click="modalOpen = false">
+              Entendido
+            </button>
           </div>
         </div>
       </div>
@@ -485,70 +444,84 @@ function colorEquipo(id: string) {
 </template>
 
 <style scoped>
-/* ════════════════════════════════════════
+/* ════════════════════════════════════════════
    PAGE
-════════════════════════════════════════ */
+════════════════════════════════════════════ */
 .inc-page {
-  max-width: 700px;
+  max-width: 640px;
   margin: 0 auto;
-  padding: 0 1rem 3rem;
+  padding: 0 1rem 4rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
-/* ════════════════════════════════════════
-   HEADER
-════════════════════════════════════════ */
-.inc-header {
+/* ════════════════════════════════════════════
+   TOPBAR
+════════════════════════════════════════════ */
+.inc-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.5rem;
   padding-top: 0.5rem;
 }
-.inc-header__left {
+.inc-topbar__left {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.6rem;
 }
-.inc-header__icon-wrap {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #dcfce7, #bbf7d0);
-  border: 1.5px solid #86efac;
+.inc-topbar__right {
   display: flex;
   align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.inc-header__icon { font-size: 1.2rem; color: #16a34a; }
-.inc-title { font-size: 1.25rem; font-weight: 800; margin: 0; color: #0f172a; }
-.inc-sub   { font-size: 0.75rem; color: #94a3b8; margin: 0.1rem 0 0; }
-
-.inc-header__actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   flex-shrink: 0;
 }
 
-.btn-ayuda {
-  width: 38px; height: 38px;
+.inc-btn-help {
+  width: 36px; height: 36px;
   border-radius: 10px;
   border: 1.5px solid #e2e8f0;
   background: white;
   color: #94a3b8;
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  font-size: 1rem;
+  cursor: pointer; font-size: 0.95rem;
   transition: color .15s, border-color .15s, background .15s;
+  flex-shrink: 0;
 }
-.btn-ayuda:hover { color: #16a34a; border-color: #bbf7d0; background: #f0fdf4; }
+.inc-btn-help:hover { color: #059669; border-color: #a7f3d0; background: #ecfdf5; }
 
-/* ── Aviso bloqueo ── */
-.inc-aviso-bloqueo {
+.inc-btn-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 36px;
+  padding: 0 0.9rem;
+  border-radius: 10px;
+  border: none;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  background: linear-gradient(135deg, #059669, #047857);
+  color: white;
+  box-shadow: 0 2px 8px rgba(5,150,105,0.3);
+  transition: box-shadow .15s, background .15s;
+}
+.inc-btn-new:hover { box-shadow: 0 4px 14px rgba(5,150,105,0.4); }
+.inc-btn-new--off {
+  background: #f1f5f9;
+  color: #94a3b8;
+  box-shadow: none;
+  border: 1.5px solid #e2e8f0;
+  cursor: not-allowed;
+}
+
+/* ════════════════════════════════════════════
+   AVISO BLOQUEO
+════════════════════════════════════════════ */
+.inc-aviso {
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
@@ -556,71 +529,97 @@ function colorEquipo(id: string) {
   border: 1.5px solid #fde68a;
   border-left: 4px solid #f59e0b;
   border-radius: 12px;
-  padding: 0.75rem 1rem;
+  padding: 0.7rem 0.9rem;
   font-size: 0.82rem;
   color: #92400e;
   line-height: 1.45;
 }
-.inc-aviso-bloqueo__icon { color: #d97706; font-size: 1rem; flex-shrink: 0; margin-top: 0.05rem; }
-.inc-aviso-bloqueo > div { display: flex; flex-direction: column; gap: 0.2rem; }
-.inc-aviso-bloqueo__fecha { font-size: 0.78rem; color: #b45309; }
+.inc-aviso > .pi { color: #d97706; font-size: 1rem; flex-shrink: 0; margin-top: 0.05rem; }
+.inc-aviso > div { display: flex; flex-direction: column; gap: 0.15rem; }
+.inc-aviso__fecha { font-size: 0.76rem; color: #b45309; }
 
-/* ════════════════════════════════════════
+/* ════════════════════════════════════════════
    SELECTOR DE DÍAS
-════════════════════════════════════════ */
+════════════════════════════════════════════ */
 .inc-dias-wrap {
-  display: flex;
-  justify-content: center;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  margin: 0 -1rem;
+  padding: 0 1rem;
 }
+.inc-dias-wrap::-webkit-scrollbar { display: none; }
 .inc-dias {
   display: flex;
-  flex-wrap: wrap;
   gap: 0.5rem;
-  justify-content: center;
+  padding-bottom: 2px;
 }
-.inc-dia-btn {
+.inc-dia {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
-  padding: 0.55rem 1.1rem;
-  border-radius: 12px;
+  gap: 0.15rem;
+  flex-shrink: 0;
+  min-width: 72px;
+  padding: 0.6rem 0.75rem;
+  border-radius: 14px;
   border: 1.5px solid #e2e8f0;
   background: white;
+  cursor: pointer;
+  transition: all .15s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+.inc-dia:hover { border-color: #6ee7b7; background: #ecfdf5; }
+.inc-dia__nombre {
   font-size: 0.82rem;
   font-weight: 600;
   color: #64748b;
-  cursor: pointer;
-  min-height: 44px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.05);
-  transition: all .15s;
+  line-height: 1;
 }
-.inc-dia-btn:hover { border-color: #86efac; color: #15803d; background: #f0fdf4; }
-.inc-dia-btn--active {
-  background: linear-gradient(135deg, #16a34a, #15803d);
-  color: white;
-  border-color: #16a34a;
-  box-shadow: 0 4px 12px rgba(22,163,74,0.3);
-}
-.inc-dia-btn__label { line-height: 1; }
-.inc-dia-btn__hoy {
+.inc-dia__hoy {
   font-size: 0.55rem;
   font-weight: 800;
   letter-spacing: 0.08em;
-  background: rgba(255,255,255,0.25);
-  color: white;
+  background: #d1fae5;
+  color: #059669;
   border-radius: 4px;
-  padding: 0 0.3rem;
+  padding: 0.1rem 0.3rem;
   line-height: 1.6;
 }
-.inc-dia-btn:not(.inc-dia-btn--active) .inc-dia-btn__hoy {
-  background: #dcfce7;
-  color: #16a34a;
+.inc-dia--on {
+  background: linear-gradient(135deg, #059669, #047857);
+  border-color: #059669;
+  box-shadow: 0 4px 12px rgba(5,150,105,0.3);
+}
+.inc-dia--on .inc-dia__nombre { color: white; font-weight: 700; }
+.inc-dia--on .inc-dia__hoy {
+  background: rgba(255,255,255,0.25);
+  color: white;
 }
 
-/* ════════════════════════════════════════
+/* ════════════════════════════════════════════
+   CARGANDO / ERROR
+════════════════════════════════════════════ */
+.inc-estado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 3rem 1rem;
+  color: #94a3b8;
+  font-size: 0.88rem;
+  text-align: center;
+}
+.inc-estado--error { color: #dc2626; }
+.inc-estado__ring {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: #ecfdf5; display: flex; align-items: center; justify-content: center;
+  color: #059669; font-size: 1.3rem;
+}
+
+/* ════════════════════════════════════════════
    STATS
-════════════════════════════════════════ */
+════════════════════════════════════════════ */
 .inc-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -629,321 +628,212 @@ function colorEquipo(id: string) {
 .inc-stat {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.6rem;
   background: white;
   border: 1.5px solid #e5e7eb;
   border-radius: 14px;
-  padding: 0.85rem 0.9rem;
-  box-shadow: 0 1px 4px rgba(0,0,0,.05);
-  transition: box-shadow .15s;
+  padding: 0.8rem 0.85rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
 }
-.inc-stat:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
-
-.inc-stat__icon-wrap {
-  width: 38px; height: 38px;
+.inc-stat__ic-wrap {
+  width: 36px; height: 36px;
   border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  font-size: 1rem;
+  flex-shrink: 0; font-size: 0.95rem;
 }
-.inc-stat__icon-wrap--bonus   { background: #dcfce7; color: #16a34a; border: 1.5px solid #bbf7d0; }
-.inc-stat__icon-wrap--demerito { background: #fee2e2; color: #dc2626; border: 1.5px solid #fecaca; }
+.inc-stat--bonus .inc-stat__ic-wrap  { background: #d1fae5; color: #059669; border: 1.5px solid #a7f3d0; }
+.inc-stat--deme  .inc-stat__ic-wrap  { background: #fee2e2; color: #dc2626; border: 1.5px solid #fecaca; }
 
 .inc-stat__body { flex: 1; min-width: 0; }
-.inc-stat__val {
+.inc-stat__num {
   display: block;
-  font-size: 1.05rem;
-  font-weight: 800;
-  line-height: 1.1;
+  font-size: 1.3rem; font-weight: 800; line-height: 1;
 }
-.inc-stat--bonus   .inc-stat__val { color: #16a34a; }
-.inc-stat--demerito .inc-stat__val { color: #dc2626; }
-.inc-stat__lbl { font-size: 0.68rem; color: #94a3b8; display: block; margin-top: 0.1rem; }
+.inc-stat--bonus .inc-stat__num { color: #059669; }
+.inc-stat--deme  .inc-stat__num { color: #dc2626; }
+.inc-stat__lbl { font-size: 0.65rem; color: #94a3b8; display: block; margin-top: 0.1rem; }
 
-.inc-stat__badge {
-  font-size: 0.65rem;
-  font-weight: 700;
-  background: #dcfce7;
-  color: #15803d;
-  border-radius: 999px;
-  padding: 0.15rem 0.5rem;
-  flex-shrink: 0;
-  align-self: flex-start;
+.inc-stat__pts {
+  font-size: 0.72rem; font-weight: 700;
+  border-radius: 999px; padding: 0.15rem 0.5rem;
+  flex-shrink: 0; align-self: flex-start; white-space: nowrap;
 }
-.inc-stat__badge--demerito { background: #fee2e2; color: #dc2626; }
+.inc-stat__pts--bonus { background: #d1fae5; color: #047857; }
+.inc-stat__pts--deme  { background: #fee2e2; color: #dc2626; }
 
-/* ════════════════════════════════════════
+/* ════════════════════════════════════════════
    FILTROS
-════════════════════════════════════════ */
+════════════════════════════════════════════ */
 .inc-filtros {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 0.5rem;
-  flex-wrap: wrap;
 }
+.inc-tabs-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  margin: 0 -1rem;
+  padding: 0 1rem;
+}
+.inc-tabs-scroll::-webkit-scrollbar { display: none; }
 .inc-tabs {
   display: flex;
   background: #f1f5f9;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 3px;
   gap: 2px;
-  flex: 1;
-  min-width: 0;
+  width: max-content;
+  min-width: 100%;
 }
 .inc-tab {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   gap: 0.25rem;
-  min-height: 36px;
-  border: none;
-  border-radius: 8px;
+  min-height: 38px;
+  padding: 0 0.65rem;
+  border: none; border-radius: 10px;
   background: transparent;
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: 0.8rem; font-weight: 600;
   color: #64748b;
-  cursor: pointer;
-  white-space: nowrap;
+  cursor: pointer; white-space: nowrap;
   transition: all .15s;
-  padding: 0 0.4rem;
 }
 .inc-tab:hover { color: #374151; }
-.inc-tab--active             { background: white; color: #111827; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
-.inc-tab--bonus.inc-tab--active    { color: #15803d; }
-.inc-tab--demerito.inc-tab--active { color: #b91c1c; }
-.inc-tab--amber.inc-tab--active    { color: #92400e; }
-.inc-tab-cnt {
-  font-size: 0.65rem;
-  background: #e2e8f0;
-  color: #374151;
-  border-radius: 999px;
-  padding: 0 0.35rem;
-  min-width: 16px;
-  text-align: center;
-  line-height: 1.6;
+.inc-tab--on { background: white; color: #111827; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+.inc-tab--bonus.inc-tab--on    { color: #047857; }
+.inc-tab--demerito.inc-tab--on { color: #b91c1c; }
+.inc-tab--pendiente.inc-tab--on { color: #92400e; }
+.inc-tab__cnt {
+  font-size: 0.62rem; font-weight: 700;
+  background: #e2e8f0; color: #374151;
+  border-radius: 999px; padding: 0 0.35rem;
+  min-width: 16px; text-align: center; line-height: 1.6;
 }
-.inc-tab--active .inc-tab-cnt { background: #f1f5f9; }
+.inc-tab--on .inc-tab__cnt { background: #f1f5f9; }
 
 .inc-equipo-sel {
-  min-height: 44px;
-  padding: 0.4rem 0.65rem;
+  width: 100%;
+  min-height: 42px;
+  padding: 0.4rem 0.75rem;
   border: 1.5px solid #e2e8f0;
   border-radius: 10px;
   font-size: 0.84rem;
   background: white;
   color: #374151;
   cursor: pointer;
-  flex-shrink: 0;
 }
-.inc-equipo-sel:focus { outline: none; border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,.12); }
+.inc-equipo-sel:focus { outline: none; border-color: #059669; box-shadow: 0 0 0 3px rgba(5,150,105,.12); }
 
-/* ════════════════════════════════════════
+/* ════════════════════════════════════════════
    CARDS
-════════════════════════════════════════ */
-.inc-lista { display: flex; flex-direction: column; gap: 0.6rem; }
+════════════════════════════════════════════ */
+.inc-lista { display: flex; flex-direction: column; gap: 0.55rem; }
 
 .inc-card {
   background: white;
   border: 1.5px solid #e5e7eb;
   border-left-width: 4px;
   border-radius: 14px;
-  padding: 0.9rem 1rem;
+  padding: 0.85rem 0.95rem;
   cursor: pointer;
   transition: box-shadow .15s, transform .1s;
-  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
 }
-.inc-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.1); transform: translateY(-1px); }
-.inc-card--bonus    { border-left-color: #16a34a; }
-.inc-card--demerito { border-left-color: #ef4444; }
+.inc-card:active { transform: scale(0.99); }
+.inc-card:hover  { box-shadow: 0 4px 16px rgba(0,0,0,.09); }
+.inc-card--bonus { border-left-color: #059669; }
+.inc-card--deme  { border-left-color: #ef4444; }
 
-.inc-card__top {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-  flex-wrap: wrap;
+.inc-card__head {
+  display: flex; align-items: center; gap: 0.45rem;
+  margin-bottom: 0.45rem; flex-wrap: wrap;
 }
+.inc-cod {
+  font-size: 0.7rem; font-weight: 800;
+  letter-spacing: 0.04em; border-radius: 6px;
+  padding: 0.18rem 0.45rem; flex-shrink: 0;
+}
+.inc-cod--b { background: #d1fae5; color: #047857; }
+.inc-cod--d { background: #fee2e2; color: #b91c1c; }
 
-.inc-card__codigo {
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  border-radius: 6px;
-  padding: 0.2rem 0.5rem;
-  flex-shrink: 0;
-}
-.inc-card__codigo--bonus   { background: #dcfce7; color: #15803d; }
-.inc-card__codigo--demerito { background: #fee2e2; color: #b91c1c; }
-
-.inc-card__equipo-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex: 1;
-  min-width: 0;
-}
-.inc-card__equipo-dot {
-  width: 10px; height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  border: 1px solid rgba(0,0,0,0.1);
-}
 .inc-card__equipo {
-  font-weight: 700;
-  font-size: 0.86rem;
-  color: #1e293b;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex; align-items: center; gap: 0.35rem;
+  flex: 1; min-width: 0;
 }
+.inc-card__dot {
+  width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,.1);
+}
+.inc-card__eq {
+  font-weight: 700; font-size: 0.84rem; color: #1e293b;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Estado badge inline */
+.inc-st {
+  font-size: 0.65rem; font-weight: 700;
+  border-radius: 6px; padding: 0.18rem 0.45rem;
+  white-space: nowrap; flex-shrink: 0;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.st--amber { background: #fef3c7; color: #92400e; }
+.st--green { background: #d1fae5; color: #065f46; }
+.st--red   { background: #fee2e2; color: #991b1b; }
 
 .inc-card__hecho {
-  font-size: 0.84rem;
-  color: #475569;
-  margin: 0 0 0.5rem;
-  line-height: 1.45;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  font-size: 0.83rem; color: #475569;
+  margin: 0 0 0.45rem; line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden;
 }
-
 .inc-card__foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
 }
 .inc-card__meta {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.74rem;
-  color: #94a3b8;
+  display: flex; align-items: center; gap: 0.3rem;
+  font-size: 0.72rem; color: #94a3b8;
 }
-.inc-card__pts {
-  font-weight: 800;
-  font-size: 0.9rem;
-  letter-spacing: -0.01em;
-}
-.pts--bonus    { color: #16a34a; }
-.pts--demerito { color: #ef4444; }
+.inc-card__meta .pi { font-size: 0.6rem; }
+.inc-card__pts { font-weight: 800; font-size: 0.88rem; }
+.pts--b { color: #059669; }
+.pts--d { color: #ef4444; }
 
-/* ════════════════════════════════════════
-   BADGES
-════════════════════════════════════════ */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  border-radius: 6px;
-  font-size: 0.67rem;
-  font-weight: 700;
-  padding: 0.18rem 0.45rem;
-  text-transform: uppercase;
-  white-space: nowrap;
-  flex-shrink: 0;
-  letter-spacing: 0.03em;
+/* ════════════════════════════════════════════
+   VACÍO
+════════════════════════════════════════════ */
+.inc-vacio {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 0.4rem; padding: 3rem 1rem; text-align: center;
 }
-.badge--azul   { background: #dcfce7; color: #166534; }
-.badge--naranja { background: #fed7aa; color: #c2410c; }
-.badge--verde  { background: #d1fae5; color: #065f46; }
-.badge--rojo   { background: #fee2e2; color: #991b1b; }
-.badge--amber  { background: #fef3c7; color: #92400e; }
-
-/* ════════════════════════════════════════
-   BOTONES
-════════════════════════════════════════ */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  min-height: 40px;
-  padding: 0.5rem 1rem;
-  border-radius: 10px;
-  border: none;
-  font-size: 0.84rem;
-  font-weight: 700;
-  cursor: pointer;
-  text-decoration: none;
-  transition: background .15s, box-shadow .15s;
-  white-space: nowrap;
-}
-.btn--primary {
-  background: linear-gradient(135deg, #16a34a, #15803d);
-  color: white;
-  box-shadow: 0 2px 8px rgba(22,163,74,0.3);
-}
-.btn--primary:hover {
-  background: linear-gradient(135deg, #15803d, #166534);
-  box-shadow: 0 4px 12px rgba(22,163,74,0.4);
-}
-.btn--disabled {
-  background: #f1f5f9;
-  color: #94a3b8;
-  cursor: not-allowed;
-  border: 1.5px solid #e2e8f0;
-  box-shadow: none;
-}
-.btn--full { width: 100%; justify-content: center; }
-
-/* ════════════════════════════════════════
-   SPINNER / EMPTY
-════════════════════════════════════════ */
-.inc-spinner {
-  width: 48px; height: 48px;
-  border-radius: 50%;
-  background: #f0fdf4;
+.inc-vacio__ic {
+  width: 54px; height: 54px; border-radius: 50%;
+  background: #f8fafc; border: 1.5px solid #e2e8f0;
   display: flex; align-items: center; justify-content: center;
-  color: #16a34a; font-size: 1.3rem;
+  font-size: 1.4rem; color: #cbd5e1; margin-bottom: 0.2rem;
 }
-.inc-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 3rem 1rem;
-  text-align: center;
-  color: #94a3b8;
-  font-size: 0.88rem;
-}
-.inc-empty--error { color: #dc2626; }
-.inc-empty__icon {
-  width: 56px; height: 56px;
-  border-radius: 50%;
-  background: #f8fafc;
-  border: 1.5px solid #e2e8f0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.5rem;
-  color: #cbd5e1;
-  margin-bottom: 0.25rem;
-}
-.inc-empty__title { font-size: 0.95rem; font-weight: 700; color: #64748b; margin: 0; }
-.inc-empty__sub   { font-size: 0.82rem; color: #94a3b8; margin: 0; line-height: 1.5; max-width: 260px; }
+.inc-vacio__title { font-size: 0.95rem; font-weight: 700; color: #64748b; margin: 0; }
+.inc-vacio__sub   { font-size: 0.8rem; color: #94a3b8; margin: 0; line-height: 1.5; max-width: 260px; }
 
-/* ════════════════════════════════════════
+/* ════════════════════════════════════════════
    MODAL
-════════════════════════════════════════ */
-.m-enter-active, .m-leave-active { transition: opacity .2s ease; }
+════════════════════════════════════════════ */
+.m-in   { transition: opacity .2s ease; }
 .m-from { opacity: 0; }
 
 .m-overlay {
   position: fixed; inset: 0; z-index: 200;
   display: flex; align-items: flex-end; justify-content: center;
 }
-@media (min-width: 640px) {
-  .m-overlay { align-items: center; padding: 1rem; }
-}
+@media (min-width: 640px) { .m-overlay { align-items: center; padding: 1rem; } }
+
 .m-backdrop {
   position: absolute; inset: 0;
-  background: rgba(0,0,0,.45);
-  backdrop-filter: blur(4px);
+  background: rgba(0,0,0,.45); backdrop-filter: blur(4px);
 }
 .m-panel {
-  position: relative;
-  width: 100%; max-width: 448px;
-  background: white;
-  border-radius: 24px 24px 0 0;
+  position: relative; width: 100%; max-width: 440px;
+  background: white; border-radius: 24px 24px 0 0;
   box-shadow: 0 20px 60px rgba(0,0,0,.25);
   display: flex; flex-direction: column;
   overflow: hidden; max-height: 90dvh;
@@ -952,196 +842,114 @@ function colorEquipo(id: string) {
 
 .m-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 1.1rem 1.25rem 0.9rem;
-  border-bottom: 1px solid #f1f5f9;
-  flex-shrink: 0;
+  padding: 1rem 1.15rem 0.85rem;
+  border-bottom: 1px solid #f1f5f9; flex-shrink: 0;
 }
 .m-head__left { display: flex; align-items: center; gap: 0.6rem; }
-.m-icon {
-  width: 34px; height: 34px; border-radius: 10px;
-  background: #dcfce7; color: #16a34a;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.9rem;
+.m-ic {
+  width: 32px; height: 32px; border-radius: 9px;
+  background: #d1fae5; color: #059669;
+  display: flex; align-items: center; justify-content: center; font-size: 0.88rem;
 }
-.m-title { font-size: 1rem; font-weight: 800; margin: 0; color: #0f172a; }
+.m-title { font-size: 0.98rem; font-weight: 800; margin: 0; color: #0f172a; }
 .m-close {
-  width: 32px; height: 32px; border-radius: 8px;
+  width: 30px; height: 30px; border-radius: 8px;
   border: none; background: transparent; color: #94a3b8;
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; font-size: 0.82rem; transition: background .15s;
+  cursor: pointer; font-size: 0.8rem; transition: background .15s;
 }
 .m-close:hover { background: #f1f5f9; color: #374151; }
 
 .m-body {
-  overflow-y: auto; padding: 1.1rem 1.25rem;
-  flex: 1; display: flex; flex-direction: column; gap: 1rem;
+  overflow-y: auto; padding: 1rem 1.15rem;
+  flex: 1; display: flex; flex-direction: column; gap: 0.9rem;
 }
-.m-intro { font-size: 0.88rem; color: #475569; margin: 0; line-height: 1.6; }
+.m-intro { font-size: 0.86rem; color: #475569; margin: 0; line-height: 1.6; }
 
 .m-regla {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.55rem;
-  background: #f0fdf4;
-  border: 1.5px solid #bbf7d0;
-  border-radius: 10px;
-  padding: 0.7rem 0.85rem;
-  font-size: 0.82rem;
-  color: #166534;
-  line-height: 1.5;
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 10px;
+  padding: 0.65rem 0.8rem; font-size: 0.81rem; color: #166534; line-height: 1.5;
 }
-.m-regla i { flex-shrink: 0; margin-top: 0.1rem; color: #16a34a; }
+.m-regla .pi { flex-shrink: 0; margin-top: 0.1rem; color: #059669; }
 
-.m-pasos { display: flex; flex-direction: column; gap: 0.75rem; }
-.m-paso  { display: flex; gap: 0.75rem; align-items: flex-start; }
+.m-pasos { display: flex; flex-direction: column; gap: 0.65rem; }
+.m-paso  { display: flex; gap: 0.7rem; align-items: flex-start; }
 .m-paso__n {
-  width: 28px; height: 28px; border-radius: 50%;
-  background: #dcfce7; color: #15803d;
-  font-weight: 800; font-size: 0.78rem;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: #d1fae5; color: #047857;
+  font-weight: 800; font-size: 0.76rem;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0; margin-top: 0.1rem;
 }
-.m-paso__n--ok { background: #16a34a; color: white; }
-.m-paso__t { font-size: 0.88rem; font-weight: 700; color: #1e293b; margin: 0 0 0.1rem; }
-.m-paso__d { font-size: 0.8rem; color: #64748b; margin: 0; line-height: 1.4; }
+.m-paso__n--ok { background: #059669; color: white; }
+.m-paso__t { font-size: 0.86rem; font-weight: 700; color: #1e293b; margin: 0 0 0.08rem; }
+.m-paso__d { font-size: 0.78rem; color: #64748b; margin: 0; line-height: 1.4; }
 
 .m-sec {
-  font-size: 0.82rem; font-weight: 700; margin: 0;
+  font-size: 0.8rem; font-weight: 700; margin: 0;
   display: flex; align-items: center; gap: 0.35rem;
 }
-.m-sec--bonus    { color: #15803d; }
-.m-sec--demerito { color: #b91c1c; }
+.m-sec--bonus { color: #047857; }
+.m-sec--deme  { color: #b91c1c; }
 
-.m-codigos { display: flex; flex-direction: column; gap: 0.4rem; margin-top: -0.5rem; }
+.m-codigos { display: flex; flex-direction: column; gap: 0.35rem; margin-top: -0.4rem; }
 .m-codigo {
-  display: flex; align-items: flex-start; gap: 0.55rem;
-  padding: 0.55rem 0.75rem;
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  padding: 0.5rem 0.7rem;
   background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 10px;
 }
-.m-codigo__info { display: flex; flex-direction: column; gap: 0.05rem; font-size: 0.82rem; }
+.m-cod {
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em;
+  border-radius: 6px; padding: 0.18rem 0.45rem; flex-shrink: 0;
+}
+.m-cod--b { background: #d1fae5; color: #047857; }
+.m-cod--d { background: #fee2e2; color: #b91c1c; }
+.m-codigo__info { display: flex; flex-direction: column; gap: 0.05rem; font-size: 0.8rem; }
 .m-codigo__info strong { color: #1e293b; }
-.m-codigo__info span   { font-size: 0.76rem; color: #64748b; }
+.m-codigo__info span   { font-size: 0.74rem; color: #64748b; }
 
 .m-estados {
-  background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 12px; padding: 0.9rem;
+  background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 12px; padding: 0.85rem;
 }
 .m-estados__tit {
-  font-size: 0.7rem; font-weight: 700; color: #94a3b8;
-  text-transform: uppercase; letter-spacing: .06em; margin: 0 0 0.6rem;
+  font-size: 0.68rem; font-weight: 700; color: #94a3b8;
+  text-transform: uppercase; letter-spacing: .06em; margin: 0 0 0.55rem;
 }
-.m-est-fila {
+.m-est-row {
   display: flex; align-items: center; gap: 0.6rem;
-  padding: 0.3rem 0; font-size: 0.8rem; color: #64748b;
+  padding: 0.28rem 0; font-size: 0.78rem; color: #64748b;
 }
-.m-est-fila + .m-est-fila { border-top: 1px solid #f1f5f9; }
+.m-est-row + .m-est-row { border-top: 1px solid #f1f5f9; }
 
 .m-nota {
   display: flex; align-items: flex-start; gap: 0.5rem;
-  padding: 0.75rem 0.9rem;
+  padding: 0.7rem 0.85rem;
   background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 10px;
-  font-size: 0.78rem; color: #78350f; line-height: 1.5;
+  font-size: 0.77rem; color: #78350f; line-height: 1.5;
 }
-.m-nota i { flex-shrink: 0; margin-top: 0.1rem; color: #d97706; }
+.m-nota .pi { flex-shrink: 0; margin-top: 0.1rem; color: #d97706; }
 
 .m-foot {
-  padding: 0.9rem 1.25rem;
-  border-top: 1px solid #f1f5f9;
-  flex-shrink: 0;
+  padding: 0.85rem 1.15rem;
+  border-top: 1px solid #f1f5f9; flex-shrink: 0;
 }
 
-/* ════════════════════════════════════════
-   RESPONSIVE — móvil pequeño (< 380px)
-════════════════════════════════════════ */
-@media (max-width: 379px) {
-  .inc-page { padding: 0 0.65rem 2.5rem; gap: 0.75rem; }
-
-  .inc-title { font-size: 1.05rem; }
-  .inc-sub   { font-size: 0.7rem; }
-  .inc-header__icon-wrap { width: 38px; height: 38px; }
-
-  /* Stats apiladas en 1 columna */
-  .inc-stats { grid-template-columns: 1fr; }
-
-  /* Tabs más compactos */
-  .inc-tab { font-size: 0.72rem; padding: 0 0.25rem; min-height: 34px; }
-  .inc-tab-cnt { display: none; }
-
-  /* Filtro select ocupa toda la fila */
-  .inc-filtros { flex-direction: column; }
-  .inc-equipo-sel { width: 100%; }
-
-  /* Cards más compactas */
-  .inc-card { padding: 0.75rem 0.85rem; }
-  .inc-card__equipo { font-size: 0.8rem; }
-  .inc-card__hecho  { font-size: 0.8rem; }
-  .inc-card__meta   { font-size: 0.7rem; }
-  .inc-card__pts    { font-size: 0.84rem; }
-
-  /* Stat compacta */
-  .inc-stat { padding: 0.7rem 0.75rem; gap: 0.5rem; }
-  .inc-stat__icon-wrap { width: 34px; height: 34px; font-size: 0.9rem; }
-  .inc-stat__val { font-size: 0.95rem; }
-  .inc-stat__lbl { font-size: 0.64rem; }
-  .inc-stat__badge { display: none; }
-
-  /* Botón registrar más compacto */
-  .btn { font-size: 0.8rem; padding: 0.45rem 0.8rem; min-height: 38px; }
+/* ════════════════════════════════════════════
+   RESPONSIVE TABLET / DESKTOP
+════════════════════════════════════════════ */
+@media (min-width: 480px) {
+  .inc-filtros { flex-direction: row; align-items: center; }
+  .inc-tabs { width: auto; }
+  .inc-tabs-scroll { margin: 0; padding: 0; overflow: visible; }
+  .inc-equipo-sel { width: auto; flex-shrink: 0; }
 }
 
-/* ════════════════════════════════════════
-   RESPONSIVE — móvil (380px – 639px)
-════════════════════════════════════════ */
-@media (min-width: 380px) and (max-width: 639px) {
-  .inc-page { padding: 0 0.9rem 2.5rem; }
-
-  /* Filtro: cuando el select no cabe, ocupa fila completa */
-  .inc-filtros { flex-wrap: wrap; }
-  .inc-equipo-sel { width: 100%; flex: none; }
-
-  /* Tabs ligeramente más pequeños */
-  .inc-tab { font-size: 0.75rem; }
-}
-
-/* ════════════════════════════════════════
-   RESPONSIVE — tablet (640px – 1023px)
-════════════════════════════════════════ */
-@media (min-width: 640px) and (max-width: 1023px) {
-  .inc-page { padding: 0 1.5rem 3rem; max-width: 760px; }
-
-  .inc-stats { gap: 0.85rem; }
-  .inc-stat { padding: 1rem 1.1rem; }
-  .inc-stat__val { font-size: 1.15rem; }
-
-  .inc-filtros { flex-wrap: nowrap; }
-  .inc-equipo-sel { flex-shrink: 0; }
-
-  /* Cards con más respiro */
-  .inc-card { padding: 1rem 1.1rem; }
-  .inc-card__equipo { font-size: 0.9rem; }
-  .inc-card__hecho  { font-size: 0.88rem; }
-
-  /* Header más espacioso */
-  .inc-title { font-size: 1.35rem; }
-  .inc-sub   { font-size: 0.8rem; }
-}
-
-/* ════════════════════════════════════════
-   RESPONSIVE — días: scroll horizontal en móvil
-════════════════════════════════════════ */
-@media (max-width: 639px) {
-  .inc-dias-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    justify-content: flex-start;
-    padding-bottom: 2px;
-  }
-  .inc-dias-wrap::-webkit-scrollbar { display: none; }
-  .inc-dias {
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    padding: 0 0.1rem;
-  }
-  .inc-dia-btn { flex-shrink: 0; }
+@media (min-width: 640px) {
+  .inc-page { padding: 0 1.5rem 4rem; }
+  .inc-dias-wrap { margin: 0; padding: 0; overflow: visible; }
+  .inc-dias { flex-wrap: wrap; }
+  .inc-dia { min-width: 80px; }
+  .inc-stat__num { font-size: 1.5rem; }
 }
 </style>

@@ -24,7 +24,8 @@
       "Bash(cd:*)",
       "Bash(grep:*)",
       "Bash(find /d/Projects/lider-camp/src/modules/observaciones -type f -name *.ts -o -name *.vue -o -name *.js)",
-      "Bash(find /d/Projects/lider-camp/src/modules/criterios -type f -name *.ts -o -name *.vue -o -name *.js)"
+      "Bash(find /d/Projects/lider-camp/src/modules/criterios -type f -name *.ts -o -name *.vue -o -name *.js)",
+      "Bash(node:*)"
     ]
   }
 }

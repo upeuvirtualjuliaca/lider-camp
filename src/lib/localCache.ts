@@ -28,8 +28,15 @@ export function cacheGet<T>(key: string): T | null {
   } catch { return null }
 }
 
+const NETWORK_TIMEOUT_MS = 7000  // 7 s — máximo espera antes de usar caché
+
 /**
  * Envuelve cualquier llamada a Supabase con caché offline.
+ *
+ * Comportamiento:
+ *  - Offline real (navigator.onLine=false)  → lee caché al instante
+ *  - Online pero lento / sin internet real  → intenta red 7 s; si falla, usa caché
+ *  - Online y rápido                        → va a red, actualiza caché, retorna
  *
  * @param key   Clave única de caché (ej. `equipos_<campId>`)
  * @param fn    Función async que va a Supabase
@@ -40,14 +47,28 @@ export async function cachedFetch<T>(
   fn: () => Promise<T>,
   ttl = TTL_7D,
 ): Promise<T> {
+  // 1. Sin red local → caché inmediata
   if (!navigator.onLine) {
     const cached = cacheGet<T>(key)
     if (cached !== null) return cached
     throw new Error(`Sin conexión y sin datos guardados para "${key}". Conéctate al menos una vez para usar este módulo offline.`)
   }
-  const result = await fn()
-  cacheSet(key, result, ttl)
-  return result
+
+  // 2. Aparentemente online → intentar red con timeout; caché como fallback
+  try {
+    let timeoutId: ReturnType<typeof setTimeout>
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('timeout')), NETWORK_TIMEOUT_MS)
+    })
+    const result = await Promise.race([fn(), timeoutPromise])
+    clearTimeout(timeoutId!)
+    cacheSet(key, result, ttl)
+    return result
+  } catch {
+    const cached = cacheGet<T>(key)
+    if (cached !== null) return cached
+    throw new Error(`Sin conexión estable y sin datos previos para "${key}". Conéctate para continuar.`)
+  }
 }
 
 export { TTL_7D, TTL_1H }

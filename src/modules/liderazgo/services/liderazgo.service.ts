@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { cachedFetch, TTL_1H } from '@/lib/localCache'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
 
 export type LiderazgoIndicador        = Tables<'liderazgo_indicadores'>
@@ -67,23 +68,26 @@ export const validacionService = {
 
 export const programacionLiderazgoService = {
   async getPorDia(momento: string, campamentoId?: string | null): Promise<ProgramacionLiderazgo | null> {
-    let q = supabase
-      .from('programacion')
-      .select('id, momento, estado, puntaje_max, criterio_id, criterios!inner(tipo_calculo)')
-      .eq('momento', momento)
-      .eq('criterios.tipo_calculo', 'liderazgo')
-      .eq('estado', 'programado')
-    if (campamentoId) q = q.eq('campamento_id', campamentoId)
-    const { data, error } = await q.maybeSingle()
-    if (error) throw error
-    if (!data) return null
-    return {
-      id: data.id,
-      momento: data.momento,
-      estado: data.estado,
-      puntaje_max: data.puntaje_max,
-      criterio_id: data.criterio_id,
-    }
+    const key = `prog_liderazgo_${campamentoId ?? 'all'}_${momento}`
+    return cachedFetch(key, async () => {
+      let q = supabase
+        .from('programacion')
+        .select('id, momento, estado, puntaje_max, criterio_id, criterios!inner(tipo_calculo)')
+        .eq('momento', momento)
+        .eq('criterios.tipo_calculo', 'liderazgo')
+        .eq('estado', 'programado')
+      if (campamentoId) q = q.eq('campamento_id', campamentoId)
+      const { data, error } = await q.maybeSingle()
+      if (error) throw error
+      if (!data) return null
+      return {
+        id: data.id,
+        momento: data.momento,
+        estado: data.estado,
+        puntaje_max: data.puntaje_max,
+        criterio_id: data.criterio_id,
+      }
+    }, TTL_1H)
   },
 }
 
@@ -114,14 +118,17 @@ export const evaluacionesService = {
   },
 
   async getResumenDia(momento: string, campamentoId?: string | null): Promise<LiderazgoEquipoDia[]> {
-    let q = supabase
-      .from('v_liderazgo_equipo_dia')
-      .select('*')
-      .eq('momento', momento)
-    if (campamentoId) q = q.eq('campamento_id', campamentoId)
-    const { data, error } = await q
-    if (error) throw error
-    return data ?? []
+    const key = `liderazgo_resumen_${campamentoId ?? 'all'}_${momento}`
+    return cachedFetch(key, async () => {
+      let q = supabase
+        .from('v_liderazgo_equipo_dia')
+        .select('*')
+        .eq('momento', momento)
+      if (campamentoId) q = q.eq('campamento_id', campamentoId)
+      const { data, error } = await q
+      if (error) throw error
+      return data ?? []
+    }, TTL_1H)
   },
 }
 

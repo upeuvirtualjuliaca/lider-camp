@@ -179,11 +179,14 @@ export const observacionesService = {
   },
 
   async getPuntajeEquipoDia(momento: string, campamentoId?: string | null): Promise<PuntajeEquipoDia[]> {
-    let q = supabase.from('v_puntaje_rubrica_equipo_dia').select('*').eq('momento', momento)
-    if (campamentoId) q = q.eq('campamento_id', campamentoId)
-    const { data, error } = await q
-    if (error) throw error
-    return data ?? []
+    const key = `puntaje_rubrica_${campamentoId ?? 'all'}_${momento}`
+    return cachedFetch(key, async () => {
+      let q = supabase.from('v_puntaje_rubrica_equipo_dia').select('*').eq('momento', momento)
+      if (campamentoId) q = q.eq('campamento_id', campamentoId)
+      const { data, error } = await q
+      if (error) throw error
+      return data ?? []
+    }, TTL_1H)
   },
 
   async getProgreso(campamentoId?: string | null): Promise<ProgresoEvaluacion[]> {

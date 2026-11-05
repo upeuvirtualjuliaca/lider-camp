@@ -4,6 +4,7 @@ import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
 import { useSessionStore }    from '@/modules/auth/store'
 import { useCampamentoStore } from '@/stores/campamento'
 import SyncStatus             from '@/components/ui/SyncStatus.vue'
+import OnlineIndicator        from '@/components/ui/OnlineIndicator.vue'
 import { initOfflineQueue }   from '@/lib/offlineQueue'
 import { precalentarCache }   from '@/lib/precalentarCache'
 
@@ -123,6 +124,7 @@ function navegar(to: string)  { menuAbierto.value = false; router.push(to) }
       </button>
       <span class="topbar__brand">🏕 LiderCamp 2026-II</span>
       <SyncStatus />
+      <OnlineIndicator />
       <div class="topbar__avatar">{{ iniciales }}</div>
     </header>
 
@@ -302,6 +304,10 @@ function navegar(to: string)  { menuAbierto.value = false; router.push(to) }
 
       <!-- CONTENIDO -->
       <main class="main-content">
+        <!-- Indicador de conectividad: fijo arriba a la derecha en escritorio -->
+        <div class="desktop-connectivity">
+          <OnlineIndicator />
+        </div>
         <div v-if="campStore.cerrado" class="banner-cerrado">
           <i class="pi pi-lock" /> Campamento cerrado — solo el administrador puede modificar datos.
         </div>
@@ -570,10 +576,23 @@ function navegar(to: string)  { menuAbierto.value = false; router.push(to) }
 /* ══════════════════════════════════════════
    ESCRITORIO ≥ 768px
 ══════════════════════════════════════════ */
+/* Indicador de conectividad: oculto en móvil (ya está en el topbar) */
+.desktop-connectivity {
+  display: none;
+}
+
 @media (min-width: 768px) {
   .topbar       { display: none; }
   .app-body     { min-height: 100dvh; }
   .sidebar      { display: flex; }
   .main-content { padding: 1.5rem; }
+
+  .desktop-connectivity {
+    display: flex;
+    position: fixed;
+    top: 1rem;
+    right: 1.25rem;
+    z-index: 50;
+  }
 }
 </style>

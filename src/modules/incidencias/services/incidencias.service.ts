@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { enqueue } from '@/lib/offlineQueue'
+import { cachedFetch, TTL_1H } from '@/lib/localCache'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
 
 // ── Tipos exportados ──────────────────────────────────────────────────────────
@@ -29,44 +30,49 @@ export interface FiltrosIncidencia {
 // ── Catálogo de códigos ───────────────────────────────────────────────────────
 export const codigosService = {
   async getAll(): Promise<IncidenciaCodigo[]> {
-    const { data, error } = await supabase
-      .from('incidencia_codigos')
-      .select('*')
-      .eq('activo', true)
-      .order('tipo')
-      .order('orden')
-    if (error) throw error
-    return data ?? []
+    return cachedFetch('incidencia_codigos', async () => {
+      const { data, error } = await supabase
+        .from('incidencia_codigos')
+        .select('*')
+        .eq('activo', true)
+        .order('tipo')
+        .order('orden')
+      if (error) throw error
+      return data ?? []
+    }, TTL_1H)
   },
 }
 
 // ── Incidencias ───────────────────────────────────────────────────────────────
 export const incidenciasService = {
   async getAll(filtros: FiltrosIncidencia = {}): Promise<Incidencia[]> {
-    // Usar alias + hint de FK para evitar ambigüedad (incidencias tiene dos FK a equipos:
-    // equipo_id y equipo_apoyado_id)
-    const selectStr = filtros.campamento_id
-      ? '*, eq_camp:equipos!equipo_id!inner(campamento_id)'
-      : '*'
+    const key = `incidencias_${filtros.campamento_id ?? 'all'}`
+    return cachedFetch(key, async () => {
+      // Usar alias + hint de FK para evitar ambigüedad (incidencias tiene dos FK a equipos:
+      // equipo_id y equipo_apoyado_id)
+      const selectStr = filtros.campamento_id
+        ? '*, eq_camp:equipos!equipo_id!inner(campamento_id)'
+        : '*'
 
-    let q = supabase
-      .from('incidencias')
-      .select(selectStr)
-      .order('fecha', { ascending: false })
-      .order('hora', { ascending: false })
+      let q = supabase
+        .from('incidencias')
+        .select(selectStr)
+        .order('fecha', { ascending: false })
+        .order('hora', { ascending: false })
 
-    if (filtros.campamento_id) q = (q as any).eq('eq_camp.campamento_id', filtros.campamento_id)
-    if (filtros.equipo_id)     q = q.eq('equipo_id', filtros.equipo_id)
-    if (filtros.codigo)        q = q.eq('codigo', filtros.codigo)
-    if (filtros.estado)        q = q.eq('estado', filtros.estado)
-    if (filtros.fecha)         q = q.eq('fecha', filtros.fecha)
+      if (filtros.campamento_id) q = (q as any).eq('eq_camp.campamento_id', filtros.campamento_id)
+      if (filtros.equipo_id)     q = q.eq('equipo_id', filtros.equipo_id)
+      if (filtros.codigo)        q = q.eq('codigo', filtros.codigo)
+      if (filtros.estado)        q = q.eq('estado', filtros.estado)
+      if (filtros.fecha)         q = q.eq('fecha', filtros.fecha)
 
-    const { data, error } = await q
-    if (error) throw error
+      const { data, error } = await q
+      if (error) throw error
 
-    // filtro por tipo requiere join a codigos; si viene, filtramos en memoria
-    // (el volumen de incidencias es pequeño)
-    return (data ?? []) as unknown as Incidencia[]
+      // filtro por tipo requiere join a codigos; si viene, filtramos en memoria
+      // (el volumen de incidencias es pequeño)
+      return (data ?? []) as unknown as Incidencia[]
+    }, TTL_1H)
   },
 
   async getValidadasPorMomento(
@@ -240,21 +246,27 @@ export const evidenciasService = {
 // ── Vistas de resumen ─────────────────────────────────────────────────────────
 export const bonusService = {
   async getResumen(campamentoId?: string | null): Promise<BonusEquipo[]> {
-    let q = supabase.from('v_bonus_equipo').select('*').order('equipo_nombre')
-    if (campamentoId) q = q.eq('campamento_id', campamentoId)
-    const { data, error } = await q
-    if (error) throw error
-    return data ?? []
+    const key = `bonus_resumen_${campamentoId ?? 'all'}`
+    return cachedFetch(key, async () => {
+      let q = supabase.from('v_bonus_equipo').select('*').order('equipo_nombre')
+      if (campamentoId) q = q.eq('campamento_id', campamentoId)
+      const { data, error } = await q
+      if (error) throw error
+      return data ?? []
+    }, TTL_1H)
   },
 }
 
 export const demeritorService = {
   async getResumen(campamentoId?: string | null): Promise<DemeritoEquipo[]> {
-    let q = supabase.from('v_demeritos_equipo').select('*').order('equipo_nombre')
-    if (campamentoId) q = q.eq('campamento_id', campamentoId)
-    const { data, error } = await q
-    if (error) throw error
-    return data ?? []
+    const key = `demeritos_resumen_${campamentoId ?? 'all'}`
+    return cachedFetch(key, async () => {
+      let q = supabase.from('v_demeritos_equipo').select('*').order('equipo_nombre')
+      if (campamentoId) q = q.eq('campamento_id', campamentoId)
+      const { data, error } = await q
+      if (error) throw error
+      return data ?? []
+    }, TTL_1H)
   },
 }
 

@@ -18,6 +18,8 @@ import {
 import { useSessionStore } from '@/modules/auth/store'
 import { useCampamentoStore } from '@/stores/campamento'
 import type { Tables } from '@/types/database'
+import OnlineIndicator from '@/components/ui/OnlineIndicator.vue'
+import { cachedFetch, TTL_1H } from '@/lib/localCache'
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 type EstadoAsistencia = 'presente' | 'ausente' | 'justificado'
@@ -127,6 +129,10 @@ const documentadoTemp = ref(false)
 
 // ── Carga inicial ──────────────────────────────────────────────────────────────
 async function cargar() {
+  // Si ya hay datos en memoria y estamos offline → quedarse donde se está
+  const yaHayDatos = equipos.value.length > 0 && Object.keys(conteosActividades.value).length > 0
+  if (yaHayDatos && !navigator.onLine) return
+
   cargando.value = true
   error.value    = ''
   paso.value     = 1
@@ -159,12 +165,14 @@ watch(() => campStore.selectedId, cargar)
 
 async function cargarDias(): Promise<DiasEvaluacion[]> {
   if (!campStore.selectedId) return []
-  const { supabase } = await import('@/lib/supabase')
-  const { data, error: err } = await supabase
-    .from('dias_evaluacion').select('*')
-    .eq('campamento_id', campStore.selectedId).order('momento')
-  if (err) throw err
-  return data ?? []
+  return cachedFetch(`dias_eval_${campStore.selectedId}`, async () => {
+    const { supabase } = await import('@/lib/supabase')
+    const { data, error: err } = await supabase
+      .from('dias_evaluacion').select('*')
+      .eq('campamento_id', campStore.selectedId!).order('momento')
+    if (err) throw err
+    return data ?? []
+  }, TTL_1H)
 }
 
 // ── Computed ──────────────────────────────────────────────────────────────────
@@ -1159,6 +1167,12 @@ function filaClass(fila: FilaIntegrante) {
 }
 .ast-page-title { font-size: 1.2rem; font-weight: 800; color: #1e293b; margin: 0; }
 .ast-page-sub   { font-size: 0.8rem; color: #94a3b8; margin: 0; }
+
+.ast-conn-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.5rem 1rem 0;
+}
 
 .ast-dias-grid {
   display: flex;
