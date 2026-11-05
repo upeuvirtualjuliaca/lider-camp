@@ -57,6 +57,13 @@ export const useCampamentoStore = defineStore('campamento', () => {
           localStorage.removeItem(LS_KEY)
         }
       }
+    } catch {
+      // Sin internet: campamentoService.getAll() retorna desde caché (localCache).
+      // Si campamentos.value quedó vacío pero selectedId ya está en localStorage,
+      // reconstruimos un objeto mínimo para que computed campamento no sea null.
+      if (campamentos.value.length === 0 && selectedId.value) {
+        campamentos.value = [{ id: selectedId.value } as Campamento]
+      }
     } finally {
       cargando.value = false
     }

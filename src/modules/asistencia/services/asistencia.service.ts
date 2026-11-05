@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { enqueue } from '@/lib/offlineQueue'
+import { cachedFetch, TTL_1H } from '@/lib/localCache'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
 
 export type EvalRegistro = Tables<'actividad_eval_registros'>
@@ -55,16 +56,15 @@ export const actividadesService = {
   },
 
   async getPorDia(momento: string): Promise<ActividadConProgramacion[]> {
-    const { data, error } = await supabase
-      .from('actividades')
-      .select('*, programacion(*, criterios(*))')
-      .eq('programacion.momento', momento)
-      .order('hora_inicio', { ascending: true, nullsFirst: true })
-    if (error) throw error
-    // Filtrar los que realmente pertenecen al momento (el join puede traer nulos)
-    return (data ?? []).filter(
-      (a) => a.programacion !== null,
-    ) as ActividadConProgramacion[]
+    return cachedFetch(`actividades_${momento}`, async () => {
+      const { data, error } = await supabase
+        .from('actividades')
+        .select('*, programacion(*, criterios(*))')
+        .eq('programacion.momento', momento)
+        .order('hora_inicio', { ascending: true, nullsFirst: true })
+      if (error) throw error
+      return (data ?? []).filter((a) => a.programacion !== null) as ActividadConProgramacion[]
+    }, TTL_1H)
   },
 
   async crear(datos: TablesInsert<'actividades'>): Promise<Actividad> {
@@ -247,15 +247,17 @@ export const evalRegistrosService = {
 // ── integrantesAsistenciaService ─────────────────────────────────────────────
 export const integrantesAsistenciaService = {
   async getPorEquipo(equipo_id: string) {
-    const { data, error } = await supabase
-      .from('integrantes')
-      .select('id, nombres, apellidos, equipo_id, activo, elegible')
-      .eq('equipo_id', equipo_id)
-      .eq('activo', true)
-      .eq('elegible', true)
-      .order('apellidos', { ascending: true })
-      .order('nombres', { ascending: true })
-    if (error) throw error
-    return data ?? []
+    return cachedFetch(`integrantes_${equipo_id}`, async () => {
+      const { data, error } = await supabase
+        .from('integrantes')
+        .select('id, nombres, apellidos, equipo_id, activo, elegible')
+        .eq('equipo_id', equipo_id)
+        .eq('activo', true)
+        .eq('elegible', true)
+        .order('apellidos', { ascending: true })
+        .order('nombres', { ascending: true })
+      if (error) throw error
+      return data ?? []
+    })
   },
 }

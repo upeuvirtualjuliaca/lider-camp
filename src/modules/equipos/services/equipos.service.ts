@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { cachedFetch } from '@/lib/localCache'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
 
 export type Equipo = Tables<'equipos'>
@@ -17,11 +18,14 @@ export interface InscripcionEquipo {
 
 export const equiposService = {
   async getTodos(campamentoId?: string): Promise<Equipo[]> {
-    let q = supabase.from('equipos').select('*').order('nombre')
-    if (campamentoId) q = q.eq('campamento_id', campamentoId)
-    const { data, error } = await q
-    if (error) throw error
-    return data ?? []
+    const key = campamentoId ? `equipos_${campamentoId}` : 'equipos_all'
+    return cachedFetch(key, async () => {
+      let q = supabase.from('equipos').select('*').order('nombre')
+      if (campamentoId) q = q.eq('campamento_id', campamentoId)
+      const { data, error } = await q
+      if (error) throw error
+      return data ?? []
+    })
   },
 
   async getPorId(id: string): Promise<Equipo | null> {

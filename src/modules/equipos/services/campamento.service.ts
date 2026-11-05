@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { cachedFetch } from '@/lib/localCache'
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
 
 export type Campamento    = Tables<'campamento'>
@@ -28,15 +29,17 @@ export const campamentoService = {
     return data
   },
 
-  /** Lista todos los campamentos, activo primero. */
+  /** Lista todos los campamentos, activo primero. Funciona offline con caché. */
   async getAll(): Promise<Campamento[]> {
-    const { data, error } = await supabase
-      .from('campamento')
-      .select('*')
-      .order('activo', { ascending: false })
-      .order('created_at', { ascending: false })
-    if (error) throw error
-    return data ?? []
+    return cachedFetch('camp_list', async () => {
+      const { data, error } = await supabase
+        .from('campamento')
+        .select('*')
+        .order('activo', { ascending: false })
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data ?? []
+    })
   },
 
   async crear(datos: TablesInsert<'campamento'>): Promise<Campamento> {
@@ -80,13 +83,15 @@ export const campamentoService = {
 
 export const diasCampamentoService = {
   async getPorCampamento(campamentoId: string): Promise<DiaCampamento[]> {
-    const { data, error } = await supabase
-      .from('dias_campamento')
-      .select('*')
-      .eq('campamento_id', campamentoId)
-      .order('orden')
-    if (error) throw error
-    return data ?? []
+    return cachedFetch(`dias_camp_${campamentoId}`, async () => {
+      const { data, error } = await supabase
+        .from('dias_campamento')
+        .select('*')
+        .eq('campamento_id', campamentoId)
+        .order('orden')
+      if (error) throw error
+      return data ?? []
+    })
   },
 
   async crear(datos: TablesInsert<'dias_campamento'>): Promise<DiaCampamento> {
