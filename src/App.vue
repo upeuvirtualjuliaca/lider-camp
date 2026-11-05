@@ -10,6 +10,11 @@ import { RouterView } from 'vue-router'
 <style>
 @import "tailwindcss";
 
+@theme {
+  --color-bad:    #A3261F;
+  --color-bad-bg: #FDECEC;
+}
+
 /* ── Variables globales LiderCamp ─────────────────────────────── */
 :root {
   /* Verde principal */

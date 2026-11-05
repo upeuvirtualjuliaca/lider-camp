@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Calificar – un criterio</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F4F6F4; font-family: Inter, system-ui, sans-serif; color: #16201B; display: flex; flex-direction: column; overflow: hidden">
+
+  <header style="background: #FFFFFF; padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid #E3E7E4">
+    <div style="display: flex; align-items: center; gap: 8px; min-height: 44px">
+      <a href="Criterios.dc.html" aria-label="Volver a criterios" style="width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-left: -8px">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16201B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+      </a>
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 1px">
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #5B6660">Armado · Sáb 7 nov</span>
+        <span style="font-size: 18px; font-weight: 700">Carpas</span>
+      </div>
+      <span style="font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 8px; background: #F4F6F4; border: 1px solid #DCE1DD">Máx. 50</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px">
+      <div style="flex: 1; height: 6px; background: #E3E7E4; border-radius: 3px; overflow: hidden">
+        <div style="height: 6px; background: #0E7C59; border-radius: 3px; width: {{pct}}%"></div>
+      </div>
+      <span style="font-size: 12px; color: #5B6660; white-space: nowrap">{{done}} de 12 equipos</span>
+    </div>
+    <button onClick="{{toggleHelp}}" style="display: flex; align-items: center; justify-content: space-between; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid #DCE1DD; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 600; color: #16201B; cursor: pointer">
+      <span style="display: flex; align-items: center; gap: 8px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5B6660" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8h.01"></path></svg>
+        Qué se evalúa
+      </span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5B6660" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+    </button>
+    <sc-if value="{{help}}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45">
+        <p style="margin: 0"><strong style="color: #0B6B4B">Abarca:</strong> ubicación autorizada, montaje estable, accesos libres, capacidad adecuada y pertenencias organizadas.</p>
+        <p style="margin: 0"><strong style="color: #7A4F00">No abarca:</strong> marca, precio, tamaño ostentoso o acabados decorativos.</p>
+      </div>
+    </sc-if>
+  </header>
+
+  <main style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+    <sc-for list="{{teams}}" as="t" hint-placeholder-count="4">
+      <article style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: #FFFFFF; background: {{t.color}}">{{t.initials}}</span>
+          <span style="flex: 1; font-size: 15px; font-weight: 600">{{t.name}}</span>
+          <span style="{{t.chip}}">{{t.status}}</span>
+        </div>
+        <div role="radiogroup" aria-label="Nota de {{t.name}}" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px">
+          <sc-for list="{{t.opts}}" as="o" hint-placeholder-count="5">
+            <button role="radio" onClick="{{o.pick}}" style="{{o.style}}">{{o.label}}</button>
+          </sc-for>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+          <span style="font-size: 13px; color: {{t.descColor}}; line-height: 1.4">{{t.desc}}</span>
+          <button aria-label="Agregar comentario para {{t.name}}" style="flex-shrink: 0; height: 32px; padding: 0 10px; border-radius: 8px; border: 0; background: transparent; display: flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; color: #5B6660; cursor: pointer">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path></svg>
+            Comentario
+          </button>
+        </div>
+      </article>
+    </sc-for>
+  </main>
+
+  <footer style="background: #FFFFFF; border-top: 1px solid #E3E7E4; padding: 12px 16px 22px">
+    <a href="Criterios.dc.html" style="height: 50px; border-radius: 14px; background: #0E7C59; color: #FFFFFF; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 600">
+      Siguiente criterio: Cerco
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+    </a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { help: false, notas: { ad: 4, ar: 3, co: null, de: null, en: 2 } }; }
+  renderVals() {
+    const self = this;
+    const max = 50;
+    const desc = [
+      'No realiza la acción pese a contar con oportunidad y apoyos.',
+      'Avance mínimo o depende de ayuda constante.',
+      'Cumple parcialmente y requiere acompañamiento frecuente.',
+      'Cumple lo esencial; omisión menor o requiere un recordatorio.',
+      'Cumple todos los aspectos, con autonomía y dentro del plazo.'
+    ];
+    const defs = [
+      { id: 'ad', name: 'Administración', initials: 'AD', color: '#1F6FB2' },
+      { id: 'ar', name: 'Arquitectura', initials: 'AR', color: '#B4532A' },
+      { id: 'co', name: 'Contabilidad', initials: 'CO', color: '#6B4FA8' },
+      { id: 'de', name: 'Derecho', initials: 'DE', color: '#2E5E8C' },
+      { id: 'en', name: 'Enfermería', initials: 'EN', color: '#B23A6B' }
+    ];
+    const notas = this.state.notas;
+    let n = 0;
+    const teams = defs.map(function (d) {
+      const sel = notas[d.id];
+      const has = sel !== null && sel !== undefined;
+      if (has) n++;
+      const opts = [0, 1, 2, 3, 4].map(function (lv) {
+        const on = sel === lv;
+        const v = max * lv / 4;
+        return {
+          label: String(v).replace('.', ','),
+          pick: function () { const x = Object.assign({}, self.state.notas); x[d.id] = lv; self.setState({ notas: x }); },
+          style: 'height: 48px; border-radius: 12px; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; ' +
+            (on ? 'background: #0E7C59; color: #FFFFFF; border: 1px solid #0E7C59;' : 'background: #F4F6F4; color: #16201B; border: 1px solid #DCE1DD;')
+        };
+      });
+      return Object.assign({}, d, {
+        opts: opts,
+        status: has ? 'Guardado' : 'Pendiente',
+        chip: 'font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; ' + (has ? 'background: #E1F3EA; color: #0B6B4B;' : 'background: #EEF0EE; color: #4A544F;'),
+        desc: has ? desc[sel] : 'Toca una nota para calificar',
+        descColor: has ? '#16201B' : '#5B6660'
+      });
+    });
+    return {
+      teams: teams, done: n, pct: Math.round(n / 12 * 100), help: this.state.help,
+      toggleHelp: function () { self.setState({ help: !self.state.help }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Evaluar – por criterio</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F4F6F4; font-family: Inter, system-ui, sans-serif; color: #16201B; display: flex; flex-direction: column; overflow: hidden">
+
+  <header style="background: #FFFFFF; padding: 12px 16px 0; display: flex; flex-direction: column; gap: 14px; border-bottom: 1px solid #E3E7E4">
+    <div style="display: flex; align-items: center; justify-content: space-between; height: 44px">
+      <button aria-label="Abrir menú" style="width: 44px; height: 44px; border: 0; background: transparent; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #16201B">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+      </button>
+      <div style="display: flex; flex-direction: column; align-items: center">
+        <span style="font-size: 17px; font-weight: 700">Evaluar</span>
+        <span style="font-size: 12px; color: #5B6660">LiderCamp 2026-II</span>
+      </div>
+      <button aria-label="Mi cuenta" style="width: 36px; height: 36px; border-radius: 50%; border: 0; background: #0E7C59; color: #FFFFFF; font-weight: 600; font-size: 14px">V</button>
+    </div>
+    <div role="tablist" aria-label="Día a evaluar" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+      <button role="tab" style="height: 52px; border-radius: 12px; font: inherit; background: #FFFFFF; color: #16201B; border: 1px solid #DCE1DD; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px"><span style="font-size: 13px; font-weight: 600">Jue 5</span><span style="font-size: 11px">Hoy · 100%</span></button>
+      <button role="tab" style="height: 52px; border-radius: 12px; font: inherit; background: #FFFFFF; color: #16201B; border: 1px solid #DCE1DD; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px"><span style="font-size: 13px; font-weight: 600">Vie 6</span><span style="font-size: 11px">82%</span></button>
+      <button role="tab" aria-selected="true" style="height: 52px; border-radius: 12px; font: inherit; background: #0E7C59; color: #FFFFFF; border: 1px solid #0E7C59; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px"><span style="font-size: 13px; font-weight: 600">Sáb 7</span><span style="font-size: 11px">{{dayPct}}%</span></button>
+    </div>
+    <div role="tablist" aria-label="Modo de evaluación" style="display: flex; gap: 24px; margin-top: 2px">
+      <a href="Main.dc.html" role="tab" style="font-size: 14px; font-weight: 500; color: #5B6660; padding: 0 0 12px">Por equipo</a>
+      <span role="tab" aria-selected="true" style="font-size: 14px; font-weight: 600; color: #0E7C59; padding: 0 0 12px; box-shadow: inset 0 -2px 0 #0E7C59">Por criterio</span>
+    </div>
+  </header>
+
+  <main style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; gap: 8px">
+      <button style="height: 34px; padding: 0 14px; border-radius: 17px; border: 0; background: #16201B; color: #FFFFFF; font: inherit; font-size: 13px; font-weight: 600">Todos · 13</button>
+      <button style="height: 34px; padding: 0 14px; border-radius: 17px; border: 1px solid #DCE1DD; background: #FFFFFF; color: #16201B; font: inherit; font-size: 13px; font-weight: 500">Pendientes · 10</button>
+      <button style="height: 34px; padding: 0 14px; border-radius: 17px; border: 1px solid #DCE1DD; background: #FFFFFF; color: #16201B; font: inherit; font-size: 13px; font-weight: 500">Completos · 3</button>
+    </div>
+
+    <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+      <section style="display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; padding: 6px 2px 0">
+          <h2 style="margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #5B6660">{{g.name}}</h2>
+          <span style="font-size: 12px; color: #5B6660">{{g.summary}}</span>
+        </div>
+        <ul style="list-style: none; margin: 0; padding: 0; background: #FFFFFF; border-radius: 16px; border: 1px solid #E3E7E4; overflow: hidden">
+          <sc-for list="{{g.items}}" as="c" hint-placeholder-count="4">
+            <li style="border-bottom: 1px solid #EEF1EF">
+              <a href="CalificarCriterio.dc.html" style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 60px; box-sizing: border-box">
+                <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+                  <span style="font-size: 15px; font-weight: 600">{{c.name}}</span>
+                  <span style="display: flex; align-items: center; gap: 8px">
+                    <span style="{{c.chip}}">{{c.status}}</span>
+                    <span style="font-size: 12px; color: #5B6660">{{c.done}}/12 equipos · máx. {{c.max}}</span>
+                  </span>
+                </span>
+                <span role="img" aria-label="{{c.pct}} por ciento" style="width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: {{c.ring}}">
+                  <span style="width: 32px; height: 32px; border-radius: 50%; background: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700">{{c.pct}}%</span>
+                </span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8A948E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+              </a>
+            </li>
+          </sc-for>
+        </ul>
+      </section>
+    </sc-for>
+    <details style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; padding: 0 14px">
+      <summary style="min-height: 48px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 600; color: #5B6660; cursor: pointer">No se evalúan hoy · 3<span style="font-weight: 500">Ver</span></summary>
+      <p style="margin: 0 0 14px; font-size: 13px; color: #5B6660; line-height: 1.5">Programa estelar (domingo) · Participación en eventos (jueves a sábado) · Cocina y uniforme (por definir)</p>
+    </details>
+  </main>
+
+  <nav aria-label="Navegación principal" style="background: #FFFFFF; border-top: 1px solid #E3E7E4; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 6px 8px 18px">
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: #0E7C59; font-size: 11px; font-weight: 600"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 8-8"></path><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"></path></svg>Evaluar</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: #5B6660; font-size: 11px; font-weight: 500"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.9"></path></svg>Asistencia</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: #5B6660; font-size: 11px; font-weight: 500"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>Incidencias</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: #5B6660; font-size: 11px; font-weight: 500"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4"></path><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"></path></svg>Ranking</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const mk = function (name, done, max) {
+      const pct = Math.round(done / 12 * 100);
+      let status = 'Sin empezar', chip = 'background: #EEF0EE; color: #4A544F;';
+      if (done === 12) { status = 'Completo'; chip = 'background: #E1F3EA; color: #0B6B4B;'; }
+      else if (done > 0) { status = 'En curso'; chip = 'background: #FFF1D6; color: #7A4F00;'; }
+      return { name: name, done: done, max: max, pct: pct, status: status,
+        chip: 'font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; ' + chip,
+        ring: 'conic-gradient(#0E7C59 ' + pct + '%, #E3E7E4 0)' };
+    };
+    const raw = [
+      { name: 'Armado del campamento', items: [mk('Carpas', 5, 50), mk('Cerco', 12, 50), mk('Basurero', 0, 50), mk('Tendedero', 0, 50), mk('Portada', 3, 100)] },
+      { name: 'Orden y cocina', items: [mk('Orden y limpieza interior', 12, 100), mk('Orden y limpieza exterior', 8, 100), mk('Cocina y orden', 0, 100), mk('Cocina y limpieza', 0, 100), mk('Cocina y menú', 0, 100)] },
+      { name: 'Ceremonias', items: [mk('Izamiento', 12, 100), mk('Barras de la mañana', 2, 100), mk('Barras de la noche', 0, 100)] }
+    ];
+    let d = 0, t = 0;
+    const groups = raw.map(function (g) {
+      let gd = 0;
+      g.items.forEach(function (c) { gd += c.done; });
+      d += gd; t += g.items.length * 12;
+      return { name: g.name, items: g.items, summary: gd + '/' + (g.items.length * 12) + ' notas' };
+    });
+    return { groups: groups, dayPct: Math.round(d / t * 100) };
+  }
+}
+</script>
+</body>
+</html>

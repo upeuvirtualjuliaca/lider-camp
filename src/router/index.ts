@@ -5,6 +5,8 @@ declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
     roles?: string[]
+    title?: string
+    section?: string
   }
 }
 
@@ -115,7 +117,7 @@ const router = createRouter({
           path: 'evaluar',
           name: 'evaluar',
           component: () => import('@/modules/observaciones/views/EvaluarView.vue'),
-          meta: { requiresAuth: true, roles: ['admin', 'evaluador'] },
+          meta: { requiresAuth: true, roles: ['admin', 'evaluador'], title: 'Evaluar', section: 'Evaluación' },
         },
         {
           path: 'avance',
@@ -139,19 +141,19 @@ const router = createRouter({
           path: 'incidencias',
           name: 'incidencias',
           component: () => import('@/modules/incidencias/views/IncidenciasView.vue'),
-          meta: { requiresAuth: true, roles: ['admin', 'evaluador'] },
+          meta: { requiresAuth: true, roles: ['admin', 'evaluador'], title: 'Incidencias', section: 'Evaluación' },
         },
         {
           path: 'incidencias/nueva',
           name: 'incidencias-nueva',
           component: () => import('@/modules/incidencias/views/NuevaIncidenciaView.vue'),
-          meta: { requiresAuth: true, roles: ['admin', 'evaluador'] },
+          meta: { requiresAuth: true, roles: ['admin', 'evaluador'], title: 'Registrar incidencia', section: 'Evaluación' },
         },
         {
           path: 'incidencias/:id',
           name: 'incidencia-detalle',
           component: () => import('@/modules/incidencias/views/IncidenciaDetalleView.vue'),
-          meta: { requiresAuth: true, roles: ['admin', 'evaluador'] },
+          meta: { requiresAuth: true, roles: ['admin', 'evaluador'], title: 'Incidencia', section: 'Evaluación' },
         },
         {
           path: 'actividades',
@@ -163,7 +165,7 @@ const router = createRouter({
           path: 'asistencia',
           name: 'asistencia',
           component: () => import('@/modules/asistencia/views/AsistenciaView.vue'),
-          meta: { requiresAuth: true, roles: ['admin', 'evaluador'] },
+          meta: { requiresAuth: true, roles: ['admin', 'evaluador'], title: 'Actividades', section: 'Evaluación' },
         },
         {
           path: 'auditoria',

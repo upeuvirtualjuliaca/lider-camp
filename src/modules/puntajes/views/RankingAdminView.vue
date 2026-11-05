@@ -241,412 +241,354 @@ function posClase(pos: number) {
   if (pos === 3) return 'rk-pos--bronce'
   return 'rk-pos--part'
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Display helpers (presentación únicamente — no tocan lógica de negocio)
+// ══════════════════════════════════════════════════════════════════════════════
+import LockedTotalCard from '../components/LockedTotalCard.vue'
+import RankingPodium   from '../components/RankingPodium.vue'
+import RankingTable    from '../components/RankingTable.vue'
+import RankingRow      from '../components/RankingRow.vue'
+
+function iniciales(nombre: string): string {
+  return nombre
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(w => w[0]?.toUpperCase() ?? '')
+    .join('')
+}
+
+// ── Active list (day or total) ────────────────────────────────────────────────
+const activeList = computed<FilaDia[]>(() =>
+  esDia.value ? listaDia.value : listaTotal.value
+)
+
+// ── Rows enriched with RANK ties and iniciales ────────────────────────────────
+interface RankRow {
+  equipo_id: string; equipo_nombre: string; equipo_color: string; iniciales: string
+  posicion: number; posLabel: string
+  pts_rubrica: number; pts_actividades: number; pts_bonus: number; pts_demeritos: number; pts_total: number
+}
+
+const rankRows = computed((): RankRow[] => {
+  // El orden y las posiciones vienen del script original (cargarDatosDia /
+  // cargarTotal ya ordenan y asignan posicion = i+1 secuencialmente).
+  // Solo añadimos iniciales y el marcador "=" cuando dos filas consecutivas
+  // tienen el mismo pts_total (empate visual, sin reasignar posición).
+  const list = activeList.value
+  if (!list.length) return []
+
+  const counts: Record<number, number> = {}
+  list.forEach(r => { counts[r.posicion] = (counts[r.posicion] ?? 0) + 1 })
+
+  return list.map(r => ({
+    ...r,
+    iniciales: iniciales(r.equipo_nombre),
+    posLabel: `${r.posicion}°${counts[r.posicion]! > 1 ? ' =' : ''}`,
+  }))
+})
+
+// ── Empty state: lista realmente vacía (sin equipos cargados) ─────────────────
+// Regla original: solo oculta el ranking cuando la lista no tiene equipos,
+// nunca porque todos tengan 0 pts (eso sigue siendo un ranking válido).
+const isEmpty = computed(() => {
+  if (!esDia.value && !campCerrado.value) return false   // bloqueado → no vacío
+  const list = esDia.value ? listaDia.value : listaTotal.value
+  return list.length === 0
+})
+
+// ── Top 3 for podium ─────────────────────────────────────────────────────────
+const podiumRows = computed(() => rankRows.value.slice(0, Math.min(3, rankRows.value.length)))
+
+// ── Max total for composition bar scale ──────────────────────────────────────
+const maxTotal = computed(() =>
+  rankRows.value.reduce((m, r) => Math.max(m, r.pts_rubrica + r.pts_actividades + r.pts_bonus), 0)
+)
+
+// ── Días cerrados (for LockedTotalCard) ───────────────────────────────────────
+const diasCerradosCount = computed(() =>
+  diasEvaluacion.value.filter(d => d.cerrado).length
+)
+
+// ── Last closed day label (for "Ver ranking del X" button) ───────────────────
+const ultimoDiaMomento = computed<string | null>(() => {
+  const ordered = momentos.value.filter(m =>
+    momentosConProg.value.has(m) &&
+    diasEvaluacion.value.find(d => d.momento === m)?.cerrado
+  )
+  return ordered.length ? (ordered[ordered.length - 1] ?? null) : null
+})
+
+const ultimoDiaLabel = computed(() =>
+  ultimoDiaMomento.value ? labelDia(ultimoDiaMomento.value) : ''
+)
+
+// ── Period name for table header ─────────────────────────────────────────────
+const periodoNombre = computed(() =>
+  esDia.value ? labelDia(tabActivo.value) : 'acumulado total'
+)
+
+// ── Refresh time ─────────────────────────────────────────────────────────────
+const refreshHora = ref<string>('')
+function actualizarHora() {
+  refreshHora.value = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
+}
+watch(cargando, (v) => { if (!v) actualizarHora() })
+onMounted(actualizarHora)
+
+function handleActualizar() {
+  if (esDia.value) cargarDatosDia(tabActivo.value)
+  else cargar()
+}
+
+// ── Mobile: expandable rows ───────────────────────────────────────────────────
+const openRowId = ref<string | null>(null)
+function toggleRow(id: string) {
+  openRowId.value = openRowId.value === id ? null : id
+}
 </script>
 
 <template>
-  <div class="rk-page">
+  <div class="min-h-full bg-[#F4F6F4]">
 
-    <!-- Header -->
-    <header class="rk-header">
-      <div class="rk-header__left">
-        <i class="pi pi-trophy rk-header__icon" />
-        <div>
-          <h1 class="rk-header__title">Ranking interno</h1>
-          <p class="rk-header__sub">{{ esDia ? labelDia(tabActivo) : 'Acumulado total · todos los días' }}</p>
-        </div>
-      </div>
-      <button class="rk-refresh" title="Actualizar" @click="esDia ? cargarDatosDia(tabActivo) : cargar()">
-        <i :class="cargando ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'" />
-      </button>
-    </header>
+    <!-- ══════════════════════════════════════════════════════════════════════
+         MOBILE  (< md / 768 px)
+         ══════════════════════════════════════════════════════════════════════ -->
+    <div class="md:hidden flex flex-col min-h-full">
 
-    <!-- Tabs -->
-    <div class="rk-tabs">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        :class="['rk-tab', tabActivo === tab.key && 'rk-tab--active']"
-        @click="seleccionarTab(tab.key)"
-      >{{ tab.label }}</button>
-    </div>
-
-    <!-- Cargando -->
-    <div v-if="cargando" class="rk-empty">
-      <i class="pi pi-spin pi-spinner rk-empty__icon" />
-      <span>Cargando…</span>
-    </div>
-
-    <!-- Error -->
-    <div v-else-if="error" class="rk-error">
-      <i class="pi pi-exclamation-triangle" /> {{ error }}
-    </div>
-
-    <!-- Tab Total: mensaje si campamento abierto -->
-    <div v-else-if="!esDia && !campCerrado" class="rk-empty">
-      <i class="pi pi-lock rk-empty__icon" />
-      <span class="rk-empty__msg">Esta información se procesará una vez cerrado el campamento.</span>
-    </div>
-
-    <!-- Tab Total: ranking acumulado cuando campamento cerrado -->
-    <div v-else-if="!esDia && campCerrado" class="rk-lista">
-      <div
-        v-for="eq in listaTotal"
-        :key="eq.equipo_id"
-        class="rk-card"
-        :class="eq.posicion === 1 ? 'rk-card--oro' : eq.posicion === 2 ? 'rk-card--plata' : eq.posicion === 3 ? 'rk-card--bronce' : 'rk-card--part'"
-      >
-        <div class="rk-card__top">
-          <span class="rk-pos" :class="posClase(eq.posicion)">{{ eq.posicion }}°</span>
-          <div class="rk-equipo">
-            <span class="rk-equipo__dot" :style="{ background: eq.equipo_color }" />
-            <span class="rk-equipo__nombre">{{ eq.equipo_nombre }}</span>
+      <!-- Mobile header + tabs -->
+      <header class="bg-white border-b border-[#E3E7E4] px-4 pt-3 pb-0 flex flex-col gap-3">
+        <div class="flex items-center justify-between gap-2 h-11">
+          <!-- Title block -->
+          <div class="flex flex-col">
+            <span class="text-[17px] font-bold leading-tight">Ranking interno</span>
+            <span class="text-[12px] text-[#5B6660]">No visible para estudiantes</span>
           </div>
-          <div class="rk-escala">
-            <span class="rk-escala__num rk-escala__num--dia">{{ eq.pts_total }}</span>
-            <span class="rk-escala__max">pts</span>
+          <!-- Refresh -->
+          <button
+            class="flex items-center gap-1.5 h-9 px-3 rounded-[10px] border border-[#DCE1DD] bg-white text-[12px] text-[#5B6660] font-[inherit] cursor-pointer disabled:opacity-50"
+            :disabled="cargando"
+            @click="handleActualizar"
+          >
+            <svg class="w-3.5 h-3.5" :class="{ 'animate-spin': cargando }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/>
+            </svg>
+            {{ refreshHora }}
+          </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex gap-1.5 overflow-x-auto pb-3" style="scrollbar-width: none;">
+          <button
+            v-for="tab in tabs"
+            :key="tab.key"
+            class="flex-shrink-0 h-[38px] px-3.5 rounded-[10px] border text-[13px] font-semibold font-[inherit] cursor-pointer transition-colors"
+            :class="tabActivo === tab.key
+              ? 'bg-[#0E7C59] text-white border-[#0E7C59]'
+              : 'bg-white text-[#16201B] border-[#DCE1DD]'"
+            @click="seleccionarTab(tab.key)"
+          >{{ tab.label }}</button>
+        </div>
+      </header>
+
+      <!-- Mobile content -->
+      <main class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+
+        <!-- Loading skeleton -->
+        <template v-if="cargando">
+          <!-- Podium skeleton -->
+          <div class="grid grid-cols-3 gap-2 items-end animate-pulse">
+            <div class="h-24 bg-white rounded-2xl border border-[#E3E7E4]" />
+            <div class="h-32 bg-white rounded-2xl border border-[#E3E7E4]" />
+            <div class="h-24 bg-white rounded-2xl border border-[#E3E7E4]" />
           </div>
-        </div>
-        <div class="rk-barra">
-          <div class="rk-barra__fill" :style="{ width: listaTotal[0]?.pts_total ? eq.pts_total / listaTotal[0].pts_total * 100 + '%' : '0%', background: '#16a34a' }" />
-        </div>
-        <div class="rk-desglose">
-          <div class="rk-grupo">
-            <p class="rk-grupo__titulo">Componentes</p>
-            <div class="rk-grupo__items">
-              <div class="rk-item"><span class="rk-item__label">Rúbrica</span><span class="rk-item__val">{{ eq.pts_rubrica }}</span></div>
-              <div class="rk-item"><span class="rk-item__label">Actividades</span><span class="rk-item__val">{{ eq.pts_actividades }}</span></div>
-              <div class="rk-item rk-item--subtotal"><span class="rk-item__label">Subtotal</span><span class="rk-item__val">{{ eq.pts_rubrica + eq.pts_actividades }}</span></div>
+          <!-- List skeleton -->
+          <div class="bg-white rounded-2xl border border-[#E3E7E4] overflow-hidden animate-pulse">
+            <div v-for="i in 5" :key="i" class="flex items-center gap-3 px-3.5 h-[58px] border-b border-[#EEF1EF] last:border-b-0">
+              <div class="w-6 h-4 bg-[#EEF1EF] rounded" />
+              <div class="w-9 h-9 bg-[#EEF1EF] rounded-[10px]" />
+              <div class="flex-1 h-4 bg-[#EEF1EF] rounded-full" />
+              <div class="w-10 h-5 bg-[#EEF1EF] rounded" />
             </div>
           </div>
-          <div class="rk-grupo">
-            <p class="rk-grupo__titulo">Ajustes</p>
-            <div class="rk-grupo__items">
-              <div v-if="eq.pts_bonus" class="rk-item rk-item--bonus"><span class="rk-item__label">+ Bonus</span><span class="rk-item__val">{{ eq.pts_bonus }}</span></div>
-              <div v-if="eq.pts_demeritos" class="rk-item rk-item--demerito"><span class="rk-item__label">− Deméritos</span><span class="rk-item__val">{{ eq.pts_demeritos }}</span></div>
-              <div class="rk-item rk-item--bruto"><span class="rk-item__label">Total</span><span class="rk-item__val">{{ eq.pts_total }}</span></div>
-            </div>
-          </div>
+        </template>
+
+        <!-- Error -->
+        <div v-else-if="error" class="rounded-2xl bg-[#FDECEC] border border-[#F5C0C0] px-4 py-3.5 flex items-center gap-3">
+          <svg class="w-5 h-5 flex-shrink-0 text-[#C0392B]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 22h16a2 2 0 0 0 1.73-4z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span class="text-[13px] font-medium text-[#C0392B]">{{ error }}</span>
         </div>
-      </div>
+
+        <!-- Total bloqueado -->
+        <LockedTotalCard
+          v-else-if="!esDia && !campCerrado"
+          :diasCerrados="diasCerradosCount"
+          :totalDias="4"
+          :ultimoDiaLabel="ultimoDiaLabel"
+          @verUltimoDia="ultimoDiaMomento && seleccionarTab(ultimoDiaMomento)"
+        />
+
+        <!-- Día no cerrado o sin puntajes -->
+        <section
+          v-else-if="esDia && !diaCerrado || isEmpty"
+          class="bg-white border border-dashed border-[#DCE1DD] rounded-2xl p-8 text-center flex flex-col gap-1.5"
+        >
+          <span class="text-[15px] font-bold">Aún no hay puntajes para este día</span>
+          <span class="text-[13px] text-[#5B6660]">El ranking aparecerá cuando se registren las primeras notas.</span>
+        </section>
+
+        <!-- Data: podio + lista -->
+        <template v-else>
+          <!-- Podium -->
+          <RankingPodium :rows="podiumRows" />
+
+          <!-- Mobile list -->
+          <ul class="list-none m-0 p-0 bg-white border border-[#E3E7E4] rounded-2xl overflow-hidden">
+            <RankingRow
+              v-for="row in rankRows"
+              :key="row.equipo_id"
+              v-bind="row"
+              :open="openRowId === row.equipo_id"
+              @toggle="toggleRow(row.equipo_id)"
+            />
+          </ul>
+          <p class="m-0 text-[12px] text-[#5B6660] text-center">
+            Toca un equipo para ver el detalle. Los empates comparten posición.
+          </p>
+        </template>
+
+      </main>
     </div>
 
-    <!-- Día no cerrado todavía -->
-    <div v-else-if="esDia && !diaCerrado" class="rk-empty">
-      <i class="pi pi-lock-open rk-empty__icon" />
-      <span class="rk-empty__msg">Esta información será mostrada una vez cerrado el día.</span>
-    </div>
+    <!-- ══════════════════════════════════════════════════════════════════════
+         TABLET + DESKTOP  (md+ / 768 px+)
+         ══════════════════════════════════════════════════════════════════════ -->
+    <div class="hidden md:flex flex-col min-h-full">
 
-    <!-- Sin datos para el día -->
-    <div v-else-if="!listaActiva.length" class="rk-empty">
-      <i class="pi pi-calendar-times rk-empty__icon" />
-      <span>Sin datos para este día.</span>
-    </div>
-
-    <!-- ── POR DÍA: tarjetas simplificadas ── -->
-    <div v-else class="rk-lista">
-      <div
-        v-for="eq in listaDia"
-        :key="eq.equipo_id"
-        class="rk-card rk-card--dia"
-        :class="eq.posicion <= 3 ? (eq.posicion === 1 ? 'rk-card--oro' : eq.posicion === 2 ? 'rk-card--plata' : 'rk-card--bronce') : 'rk-card--part'"
-      >
-        <div class="rk-card__top">
-          <span class="rk-pos" :class="posClase(eq.posicion)">{{ eq.posicion }}°</span>
-          <div class="rk-equipo">
-            <span class="rk-equipo__dot" :style="{ background: eq.equipo_color }" />
-            <span class="rk-equipo__nombre">{{ eq.equipo_nombre }}</span>
-          </div>
-          <div class="rk-escala">
-            <span class="rk-escala__num rk-escala__num--dia">{{ eq.pts_total }}</span>
-            <span class="rk-escala__max">pts</span>
+      <!-- Desktop/tablet header -->
+      <header class="min-h-[64px] px-5 xl:px-7 py-2.5 flex flex-wrap items-center gap-3 border-b border-[#E3E7E4] bg-white box-border">
+        <!-- Title -->
+        <div class="flex flex-col mr-auto">
+          <span class="text-[12px] text-[#5B6660]">Seguimiento</span>
+          <div class="flex items-center gap-2.5">
+            <span class="text-[18px] font-bold">Ranking interno</span>
+            <!-- "No visible" badge -->
+            <span class="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-[6px] bg-[#EEF0EE] text-[#4A544F]">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M17.9 17.9A10 10 0 0 1 12 20c-7 0-10-8-10-8a18 18 0 0 1 5.1-5.9M9.9 4.2A9 9 0 0 1 12 4c7 0 10 8 10 8a18 18 0 0 1-2.2 3.2M1 1l22 22"/>
+              </svg>
+              No visible para estudiantes
+            </span>
           </div>
         </div>
-        <div class="rk-desglose">
-          <div class="rk-grupo">
-            <p class="rk-grupo__titulo">Del día</p>
-            <div class="rk-grupo__items">
-              <div class="rk-item"><span class="rk-item__label">Rúbrica</span><span class="rk-item__val">{{ eq.pts_rubrica }}</span></div>
-              <div class="rk-item"><span class="rk-item__label">Actividades</span><span class="rk-item__val">{{ eq.pts_actividades }}</span></div>
-            </div>
-          </div>
-          <div v-if="eq.pts_bonus || eq.pts_demeritos" class="rk-grupo">
-            <p class="rk-grupo__titulo">Ajustes del día</p>
-            <div class="rk-grupo__items">
-              <div v-if="eq.pts_bonus" class="rk-item rk-item--bonus"><span class="rk-item__label">+ Bonus</span><span class="rk-item__val">{{ eq.pts_bonus }}</span></div>
-              <div v-if="eq.pts_demeritos" class="rk-item rk-item--demerito"><span class="rk-item__label">− Deméritos</span><span class="rk-item__val">{{ eq.pts_demeritos }}</span></div>
-            </div>
-          </div>
+
+        <!-- Tabs -->
+        <div role="tablist" aria-label="Periodo" class="flex gap-1.5 flex-wrap">
+          <button
+            v-for="tab in tabs"
+            :key="tab.key"
+            role="tab"
+            class="h-[38px] px-3.5 rounded-[10px] border text-[13px] font-semibold font-[inherit] cursor-pointer transition-colors"
+            :class="tabActivo === tab.key
+              ? 'bg-[#0E7C59] text-white border-[#0E7C59]'
+              : 'bg-white text-[#16201B] border-[#DCE1DD] hover:border-[#0E7C59] hover:text-[#0E7C59]'"
+            :aria-selected="tabActivo === tab.key"
+            @click="seleccionarTab(tab.key)"
+          >{{ tab.label }}</button>
         </div>
-      </div>
+
+        <!-- Refresh button -->
+        <button
+          class="h-[38px] px-3 rounded-[10px] border border-[#DCE1DD] bg-white text-[12px] text-[#5B6660] font-[inherit] cursor-pointer flex items-center gap-1.5 hover:bg-[#F4F6F4] transition-colors disabled:opacity-50"
+          :disabled="cargando"
+          aria-label="Actualizar"
+          @click="handleActualizar"
+        >
+          <svg class="w-3.5 h-3.5" :class="{ 'animate-spin': cargando }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/>
+          </svg>
+          {{ refreshHora }}
+        </button>
+      </header>
+
+      <!-- Main content -->
+      <main class="flex-1 overflow-y-auto">
+        <div class="w-full max-w-[1140px] mx-auto px-5 xl:px-7 py-5 xl:py-6 flex flex-col gap-4 xl:gap-[18px]">
+
+          <!-- Loading skeletons -->
+          <template v-if="cargando">
+            <!-- Podium skeleton -->
+            <div class="grid grid-cols-3 gap-3 xl:gap-4 animate-pulse">
+              <div class="h-20 xl:h-28 bg-white rounded-2xl border border-[#E3E7E4]" />
+              <div class="h-20 xl:h-36 bg-white rounded-2xl border border-[#E3E7E4]" />
+              <div class="h-20 xl:h-28 bg-white rounded-2xl border border-[#E3E7E4]" />
+            </div>
+            <!-- Table skeleton -->
+            <div class="bg-white rounded-2xl border border-[#E3E7E4] overflow-hidden animate-pulse">
+              <div class="h-12 bg-[#F4F6F4] border-b border-[#EEF1EF]" />
+              <div v-for="i in 5" :key="i" class="flex items-center gap-4 px-5 h-[52px] border-b border-[#EEF1EF] last:border-b-0">
+                <div class="w-10 h-4 bg-[#EEF1EF] rounded" />
+                <div class="w-9 h-9 bg-[#EEF1EF] rounded-[9px]" />
+                <div class="flex-1 h-4 bg-[#EEF1EF] rounded-full" />
+                <div class="w-20 h-2.5 bg-[#EEF1EF] rounded-full" />
+                <div class="w-12 h-5 bg-[#EEF1EF] rounded" />
+              </div>
+            </div>
+          </template>
+
+          <!-- Error -->
+          <div v-else-if="error" class="rounded-2xl bg-[#FDECEC] border border-[#F5C0C0] px-5 py-4 flex items-center gap-3">
+            <svg class="w-5 h-5 flex-shrink-0 text-[#C0392B]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 22h16a2 2 0 0 0 1.73-4z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span class="text-[14px] font-medium text-[#C0392B]">{{ error }}</span>
+          </div>
+
+          <!-- Total bloqueado (campamento aún abierto) -->
+          <LockedTotalCard
+            v-else-if="!esDia && !campCerrado"
+            :diasCerrados="diasCerradosCount"
+            :totalDias="4"
+            :ultimoDiaLabel="ultimoDiaLabel"
+            @verUltimoDia="ultimoDiaMomento && seleccionarTab(ultimoDiaMomento)"
+          />
+
+          <!-- Día no cerrado -->
+          <section
+            v-else-if="esDia && !diaCerrado"
+            class="bg-white border border-dashed border-[#DCE1DD] rounded-2xl p-10 text-center flex flex-col gap-1.5"
+          >
+            <span class="text-[16px] font-bold">Aún no hay puntajes para este día</span>
+            <span class="text-[14px] text-[#5B6660]">El ranking aparecerá cuando se registren las primeras notas.</span>
+          </section>
+
+          <!-- Sin puntajes (todos 0) -->
+          <section
+            v-else-if="isEmpty"
+            class="bg-white border border-dashed border-[#DCE1DD] rounded-2xl p-10 text-center flex flex-col gap-1.5"
+          >
+            <span class="text-[16px] font-bold">Aún no hay puntajes para este día</span>
+            <span class="text-[14px] text-[#5B6660]">El ranking aparecerá cuando se registren las primeras notas.</span>
+          </section>
+
+          <!-- Data: podium + table -->
+          <template v-else>
+            <RankingPodium :rows="podiumRows" />
+            <RankingTable
+              :rows="rankRows"
+              :maxTotal="maxTotal"
+              :periodo="periodoNombre"
+            />
+          </template>
+
+        </div>
+      </main>
     </div>
 
   </div>
 </template>
-
-<style scoped>
-.rk-page {
-  max-width: 680px;
-  margin: 0 auto;
-  padding: 0 1rem 2rem;
-}
-
-/* Header */
-.rk-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1.25rem;
-}
-.rk-header__left {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-.rk-header__icon {
-  font-size: 1.3rem;
-  color: #15803d;
-}
-.rk-header__title {
-  font-size: 1.15rem;
-  font-weight: 800;
-  color: #111827;
-  margin: 0;
-  line-height: 1.2;
-}
-.rk-header__sub {
-  font-size: 0.75rem;
-  color: #9ca3af;
-  margin: 0;
-}
-.rk-refresh {
-  width: 38px; height: 38px;
-  border-radius: 50%;
-  border: 1.5px solid #d1fae5;
-  background: #f0fdf4;
-  color: #16a34a;
-  font-size: 0.95rem;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: background .15s;
-}
-.rk-refresh:hover { background: #dcfce7; }
-
-/* Empty / Error */
-.rk-empty {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 0.5rem; padding: 3rem 1rem;
-  color: #9ca3af; font-size: 0.88rem;
-}
-.rk-empty__icon { font-size: 2rem; }
-.rk-empty__msg {
-  max-width: 260px;
-  text-align: center;
-  line-height: 1.5;
-  color: #6b7280;
-}
-.rk-error {
-  background: #fef2f2; border: 1px solid #fecaca;
-  border-radius: 10px; padding: 0.9rem 1rem;
-  color: #b91c1c; font-size: 0.85rem;
-  display: flex; align-items: center; gap: 0.5rem;
-}
-
-/* Tabs */
-.rk-tabs {
-  display: flex;
-  gap: 0.4rem;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin-bottom: 1rem;
-  padding-bottom: 2px;
-}
-.rk-tabs::-webkit-scrollbar { display: none; }
-.rk-tab {
-  flex-shrink: 0;
-  padding: 0.4rem 1rem;
-  border-radius: 20px;
-  border: 2px solid #e5e7eb;
-  background: white;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #6b7280;
-  cursor: pointer;
-  min-height: 36px;
-  transition: all .15s;
-}
-.rk-tab:hover { border-color: #bbf7d0; color: #15803d; }
-.rk-tab--active { background: #16a34a; border-color: #16a34a; color: white; }
-
-/* Lista */
-.rk-lista { display: flex; flex-direction: column; gap: 0.75rem; }
-
-/* Card */
-.rk-card {
-  border: 2px solid #e5e7eb;
-  border-radius: 16px;
-  padding: 1rem;
-  background: white;
-  cursor: pointer;
-  transition: transform .12s, box-shadow .12s;
-}
-.rk-card:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,.08); }
-.rk-card--oro    { border-color: #fde68a; background: #fffbeb; }
-.rk-card--plata  { border-color: #cbd5e1; background: #f8fafc; }
-.rk-card--bronce { border-color: #fcd34d; background: #fffbeb; }
-.rk-card--part   { border-color: #e5e7eb; background: white; }
-
-/* Top row */
-.rk-card__top {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.6rem;
-}
-
-/* Posición */
-.rk-pos {
-  font-size: 1.5rem;
-  font-weight: 900;
-  width: 2.4rem;
-  text-align: center;
-  flex-shrink: 0;
-  line-height: 1;
-}
-.rk-pos--oro    { color: #d97706; }
-.rk-pos--plata  { color: #64748b; }
-.rk-pos--bronce { color: #b45309; }
-.rk-pos--part   { color: #9ca3af; }
-
-/* Equipo */
-.rk-equipo {
-  display: flex; align-items: center; gap: 0.5rem;
-  flex: 1; min-width: 0;
-}
-.rk-equipo__dot {
-  width: 14px; height: 14px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  border: 2px solid white;
-  box-shadow: 0 0 0 1px rgba(0,0,0,.1);
-}
-.rk-equipo__nombre {
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: #111827;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Badge medalla */
-.rk-badge {
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.25rem 0.6rem;
-  border-radius: 20px;
-  flex-shrink: 0;
-  display: none;
-}
-@media (min-width: 400px) { .rk-badge { display: inline-flex; align-items: center; gap: 0.25rem; } }
-.rk-badge--oro    { background: #fef3c7; color: #92400e; }
-.rk-badge--plata  { background: #f1f5f9; color: #475569; }
-.rk-badge--bronce { background: #fef3c7; color: #78350f; }
-.rk-badge--part   { background: #f3f4f6; color: #6b7280; }
-
-/* Escala */
-.rk-escala {
-  display: flex; align-items: baseline; gap: 0.15rem;
-  flex-shrink: 0;
-}
-.rk-escala__num {
-  font-size: 1.5rem;
-  font-weight: 900;
-  color: #15803d;
-  line-height: 1;
-}
-.rk-escala__max {
-  font-size: 0.72rem;
-  color: #9ca3af;
-  font-weight: 600;
-}
-
-/* Barra */
-.rk-barra {
-  height: 6px;
-  background: #f3f4f6;
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 0.85rem;
-}
-.rk-barra__fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width .4s ease;
-}
-
-/* Desglose */
-.rk-desglose {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-}
-@media (max-width: 420px) {
-  .rk-desglose { grid-template-columns: 1fr; }
-}
-
-.rk-grupo__titulo {
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  color: #9ca3af;
-  margin: 0 0 0.4rem;
-}
-.rk-grupo__items {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.rk-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.22rem 0.5rem;
-  border-radius: 6px;
-  background: rgba(0,0,0,.03);
-}
-.rk-item__label {
-  font-size: 0.75rem;
-  color: #6b7280;
-}
-.rk-item__val {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #374151;
-}
-.rk-item--subtotal {
-  background: #f0fdf4;
-  margin-top: 0.1rem;
-}
-.rk-item--subtotal .rk-item__label,
-.rk-item--subtotal .rk-item__val { color: #15803d; font-weight: 800; }
-
-.rk-item--bonus   { background: #f0fdf4; }
-.rk-item--bonus   .rk-item__label { color: #16a34a; font-weight: 600; }
-.rk-item--bonus   .rk-item__val   { color: #15803d; }
-
-.rk-item--demerito { background: #fff7ed; }
-.rk-item--demerito .rk-item__label { color: #ea580c; font-weight: 600; }
-.rk-item--demerito .rk-item__val   { color: #c2410c; }
-
-.rk-item--bruto {
-  background: #1e293b;
-  margin-top: 0.1rem;
-}
-.rk-item--bruto .rk-item__label { color: #94a3b8; font-weight: 700; }
-.rk-item--bruto .rk-item__val   { color: #f1f5f9; font-size: 0.85rem; }
-
-.rk-escala__num--dia { font-size: 1.3rem; }
-.rk-card--dia .rk-barra { display: none; }
-</style>

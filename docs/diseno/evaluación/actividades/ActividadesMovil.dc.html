@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Actividades – celular – lista</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F4F6F4; font-family: Inter, system-ui, sans-serif; color: #16201B; display: flex; flex-direction: column; overflow: hidden">
+
+  <header style="background: #FFFFFF; padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 14px; border-bottom: 1px solid #E3E7E4">
+    <div style="display: flex; align-items: center; justify-content: space-between; height: 44px">
+      <button aria-label="Abrir menú" style="width: 44px; height: 44px; border: 0; background: transparent; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #16201B">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+      </button>
+      <div style="display: flex; flex-direction: column; align-items: center">
+        <span style="font-size: 17px; font-weight: 700">Actividades</span>
+        <span style="font-size: 12px; color: #5B6660">Evaluación</span>
+      </div>
+      <button aria-label="Mi cuenta" style="width: 36px; height: 36px; border-radius: 50%; border: 0; background: #0E7C59; color: #FFFFFF; font: inherit; font-weight: 700; font-size: 14px">V</button>
+    </div>
+    <div role="tablist" aria-label="Día" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+      <button role="tab" aria-selected="true" style="height: 52px; border-radius: 12px; font: inherit; background: #0E7C59; color: #FFFFFF; border: 1px solid #0E7C59; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px"><span style="font-size: 13px; font-weight: 600">Jue 5</span><span style="font-size: 11px">Hoy · 1 act.</span></button>
+      <button role="tab" style="height: 52px; border-radius: 12px; font: inherit; background: #FFFFFF; color: #16201B; border: 1px solid #DCE1DD; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px"><span style="font-size: 13px; font-weight: 600">Vie 6</span><span style="font-size: 11px">2 act.</span></button>
+      <button role="tab" style="height: 52px; border-radius: 12px; font: inherit; background: #FFFFFF; color: #16201B; border: 1px solid #DCE1DD; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px"><span style="font-size: 13px; font-weight: 600">Sáb 7</span><span style="font-size: 11px">1 act.</span></button>
+    </div>
+  </header>
+
+  <main style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+    <h2 style="margin: 0 2px; font-size: 12px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #5B6660">Jueves 5 de noviembre</h2>
+
+    <a href="ActividadEquiposMovil.dc.html" style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; padding: 14px; display: flex; gap: 14px">
+      <span style="width: 56px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 12px; background: #E1F3EA; color: #0B6B4B; height: 56px">
+        <span style="font-size: 15px; font-weight: 700">16:30</span>
+      </span>
+      <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+        <span style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px">
+          <span style="font-size: 15px; font-weight: 600; line-height: 1.3">Programa Apertura y Estelar 1</span>
+          <span style="flex-shrink: 0; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: #E1F3EA; color: #0B6B4B">Realizada</span>
+        </span>
+        <span style="font-size: 12px; color: #5B6660">Centro de Concentración · Programas estelares</span>
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #5B6660">
+          <span style="flex: 1; height: 4px; background: #E3E7E4; border-radius: 2px; overflow: hidden"><span style="display: block; height: 4px; width: 15%; background: #0E7C59"></span></span>
+          9 de 60 notas
+        </span>
+      </span>
+    </a>
+
+    <div style="border: 1px dashed #DCE1DD; border-radius: 16px; padding: 16px; font-size: 13px; color: #5B6660; text-align: center">No hay más actividades este día</div>
+  </main>
+
+  <nav aria-label="Navegación principal" style="background: #FFFFFF; border-top: 1px solid #E3E7E4; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 6px 8px 18px">
+    <a href="InicioMovil.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: #5B6660; font-size: 11px; font-weight: 500"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>Inicio</a>
+    <a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: #5B6660; font-size: 11px; font-weight: 500"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 8-8"></path><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"></path></svg>Evaluar</a>
+    <a href="#" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: #0E7C59; font-size: 11px; font-weight: 600"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.9"></path></svg>Actividades</a>
+    <a href="#" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: #5B6660; font-size: 11px; font-weight: 500"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>Incidencias</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

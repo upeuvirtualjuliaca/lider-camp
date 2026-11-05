@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Incidencias – celular – lista</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F4F6F4; font-family: Inter, system-ui, sans-serif; color: #16201B; display: flex; flex-direction: column; overflow: hidden; position: relative">
+
+  <header style="background: #FFFFFF; padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid #E3E7E4">
+    <div style="display: flex; align-items: center; justify-content: space-between; height: 44px">
+      <button aria-label="Abrir menú" style="width: 44px; height: 44px; border: 0; background: transparent; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #16201B">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+      </button>
+      <div style="display: flex; flex-direction: column; align-items: center">
+        <span style="font-size: 17px; font-weight: 700">Incidencias</span>
+        <span style="font-size: 12px; color: #5B6660">Evaluación</span>
+      </div>
+      <button aria-label="Mi cuenta" style="width: 36px; height: 36px; border-radius: 50%; border: 0; background: #0E7C59; color: #FFFFFF; font: inherit; font-weight: 700; font-size: 14px">V</button>
+    </div>
+    <div role="tablist" aria-label="Día" style="display: flex; gap: 6px; overflow-x: auto">
+      <button role="tab" style="flex-shrink: 0; height: 38px; padding: 0 14px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; background: #FFFFFF; color: #16201B; border: 1px solid #DCE1DD">Todos</button>
+      <button role="tab" aria-selected="true" style="flex-shrink: 0; height: 38px; padding: 0 14px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; background: #0E7C59; color: #FFFFFF; border: 1px solid #0E7C59">Jue 5 · Hoy</button>
+      <button role="tab" style="flex-shrink: 0; height: 38px; padding: 0 14px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; background: #FFFFFF; color: #16201B; border: 1px solid #DCE1DD">Vie 6</button>
+      <button role="tab" style="flex-shrink: 0; height: 38px; padding: 0 14px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; background: #FFFFFF; color: #16201B; border: 1px solid #DCE1DD">Sáb 7</button>
+    </div>
+  </header>
+
+  <main style="flex: 1; overflow-y: auto; padding: 14px 16px 90px; display: flex; flex-direction: column; gap: 12px">
+    <section aria-label="Resumen" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+      <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 14px; padding: 10px"><span style="display: block; font-size: 11px; color: #5B6660">Bonus</span><span style="font-size: 20px; font-weight: 700; color: #0B6B4B">+25</span></div>
+      <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 14px; padding: 10px"><span style="display: block; font-size: 11px; color: #5B6660">Deméritos</span><span style="font-size: 20px; font-weight: 700; color: #A3261F">0</span></div>
+      <div style="background: #FFF8EA; border: 1px solid #F3DDAE; border-radius: 14px; padding: 10px"><span style="display: block; font-size: 11px; color: #7A4F00">Por validar</span><span style="font-size: 20px; font-weight: 700; color: #7A4F00">2</span></div>
+    </section>
+
+    <div style="display: flex; gap: 6px; overflow-x: auto">
+      <button style="flex-shrink: 0; height: 34px; padding: 0 12px; border-radius: 17px; border: 0; background: #16201B; color: #FFFFFF; font: inherit; font-size: 13px; font-weight: 600">Todas · 4</button>
+      <button style="flex-shrink: 0; height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #DCE1DD; background: #FFFFFF; color: #16201B; font: inherit; font-size: 13px; font-weight: 500">Bonus · 3</button>
+      <button style="flex-shrink: 0; height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #DCE1DD; background: #FFFFFF; color: #16201B; font: inherit; font-size: 13px; font-weight: 500">Deméritos · 1</button>
+      <button style="flex-shrink: 0; height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #DCE1DD; background: #FFFFFF; color: #16201B; font: inherit; font-size: 13px; font-weight: 500">Por validar · 2</button>
+    </div>
+
+    <ul style="list-style: none; margin: 0; padding: 0; background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; overflow: hidden">
+      <sc-for list="{{items}}" as="it" hint-placeholder-count="4">
+        <li style="border-bottom: 1px solid #EEF1EF">
+          <a href="#" style="display: flex; align-items: flex-start; gap: 12px; padding: 14px">
+            <span style="{{it.codeStyle}}">{{it.code}}</span>
+            <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+              <span style="display: flex; justify-content: space-between; gap: 8px">
+                <span style="font-size: 14px; font-weight: 600">{{it.team}}</span>
+                <span style="font-size: 14px; font-weight: 700; color: {{it.ptsColor}}">{{it.pts}}</span>
+              </span>
+              <span style="font-size: 13px; color: #3A4540; line-height: 1.4">{{it.fact}}</span>
+              <span style="display: flex; align-items: center; gap: 8px">
+                <span style="{{it.stateStyle}}">{{it.state}}</span>
+                <span style="font-size: 12px; color: #5B6660">{{it.time}}</span>
+              </span>
+            </span>
+          </a>
+        </li>
+      </sc-for>
+    </ul>
+  </main>
+
+  <a href="IncidenciaNuevaMovil.dc.html" style="position: absolute; right: 16px; bottom: 92px; height: 52px; padding: 0 20px; border-radius: 26px; background: #0E7C59; color: #FFFFFF; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; box-shadow: 0 4px 12px rgba(14,124,89,0.3)">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Registrar</a>
+
+  <nav aria-label="Navegación principal" style="background: #FFFFFF; border-top: 1px solid #E3E7E4; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 6px 8px 18px">
+    <a href="InicioMovil.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: #5B6660; font-size: 11px; font-weight: 500"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>Inicio</a>
+    <a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: #5B6660; font-size: 11px; font-weight: 500"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 8-8"></path><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"></path></svg>Evaluar</a>
+    <a href="ActividadesMovil.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: #5B6660; font-size: 11px; font-weight: 500"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.9"></path></svg>Actividades</a>
+    <a href="#" aria-current="page" style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: #0E7C59; font-size: 11px; font-weight: 600"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>Incidencias</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const states = {
+      registrado: ['Registrada', 'background: #EEF0EE; color: #4A544F;'],
+      descargo: ['En descargo', 'background: #FFF1D6; color: #7A4F00;'],
+      validado: ['Validada', 'background: #E1F3EA; color: #0B6B4B;'],
+      rechazado: ['Rechazada', 'background: #FDECEC; color: #A3261F;']
+    };
+    const raw = [
+      { code: 'B1', bonus: true, team: 'Educación', time: '09:13', fact: 'Apoyó con la limpieza de los SS.HH. de damas y varones.', st: 'validado', pts: '+25' },
+      { code: 'B2', bonus: true, team: 'Nutrición Humana', time: '11:40', fact: 'Prestó su cocina al equipo de Derecho.', st: 'descargo', pts: '+25' },
+      { code: 'D1', bonus: false, team: 'Arquitectura', time: '22:35', fact: 'Ruido tras la advertencia de las 22:10.', st: 'registrado', pts: '−10' },
+      { code: 'B1', bonus: true, team: 'Educación', time: '09:15', fact: 'Registro duplicado del apoyo en SS.HH.', st: 'rechazado', pts: '+25' }
+    ];
+    return {
+      items: raw.map(function (r) {
+        return Object.assign({}, r, {
+          state: states[r.st][0],
+          stateStyle: 'font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; ' + states[r.st][1],
+          codeStyle: 'flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; ' + (r.bonus ? 'background: #E1F3EA; color: #0B6B4B;' : 'background: #FDECEC; color: #A3261F;'),
+          ptsColor: r.st === 'rechazado' ? '#8A948E' : (r.bonus ? '#0B6B4B' : '#A3261F')
+        });
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

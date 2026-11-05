@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useSessionStore } from '@/modules/auth/store'
 import { useCampamentoStore } from '@/stores/campamento'
@@ -11,21 +11,30 @@ import {
   type IncidenciaCodigo,
 } from '@/modules/incidencias/services/incidencias.service'
 import { equiposService, integrantesService, type Equipo, type Integrante } from '@/modules/equipos/services/equipos.service'
+import CodePicker   from '../components/CodePicker.vue'
+import TeamGrid     from '../components/TeamGrid.vue'
+import StepProgress from '../components/StepProgress.vue'
+import SummaryPanel from '../components/SummaryPanel.vue'
 
-const router  = useRouter()
-const route   = useRoute()
-const session = useSessionStore()
+const router    = useRouter()
+const route     = useRoute()
+const session   = useSessionStore()
 const campStore = useCampamentoStore()
 
-// ── Datos de referencia ───────────────────────────────────────────────────────
-const codigos  = ref<IncidenciaCodigo[]>([])
-const equipos  = ref<Equipo[]>([])
+const PASO_NOMBRES = ['Tipo', 'Equipo', 'Detalles', 'Confirmar']
+
+// ── Referencia ────────────────────────────────────────────────────────────────
+const codigos     = ref<IncidenciaCodigo[]>([])
+const equipos     = ref<Equipo[]>([])
 const integrantes = ref<Integrante[]>([])
 const cargandoRef = ref(true)
 
 onMounted(async () => {
   try {
-    const [cod, eq] = await Promise.all([codigosService.getAll(), equiposService.getTodos(campStore.selectedId ?? undefined)])
+    const [cod, eq] = await Promise.all([
+      codigosService.getAll(),
+      equiposService.getTodos(campStore.selectedId ?? undefined),
+    ])
     codigos.value = cod
     equipos.value = eq
   } finally {
@@ -33,89 +42,77 @@ onMounted(async () => {
   }
 })
 
-// ── Pasos ─────────────────────────────────────────────────────────────────────
-const paso = ref(1)
-
-const PASOS_DEMERITO = [
-  { n: 1, label: 'Tipo' },
-  { n: 2, label: 'Equipo' },
-  { n: 3, label: 'Detalles' },
-  { n: 4, label: 'Confirmar' },
-]
-const PASOS_BONUS = [
-  { n: 1, label: 'Tipo' },
-  { n: 2, label: 'Equipo' },
-  { n: 3, label: 'Detalles' },
-  { n: 4, label: 'Confirmar' },
-]
-
-const pasosActivos = computed(() => tipo.value === 'bonus' ? PASOS_BONUS : PASOS_DEMERITO)
-const pasoFinal    = computed(() => 4)
+// ── Helpers de fecha/hora ─────────────────────────────────────────────────────
+function fechaHoy() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+function horaInicial() {
+  const n = new Date()
+  return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`
+}
 
 // ── Formulario ────────────────────────────────────────────────────────────────
-const tipo      = ref<'bonus' | 'demerito' | ''>('')
-const codigoSel = ref('')
-const equipoId  = ref('')
-const equipoApId = ref('')
-const fecha     = ref((route.query.fecha as string) || new Date().toISOString().slice(0, 10))
-const hora      = ref('')
-const hecho     = ref('')
-const alcance         = ref('equipo')
-const puntosBonus     = ref<number>(25)
-const puntosDemerito  = ref<number>(0)
-const cantPersonas    = ref(1)
-const advertenciaRef = ref('')
+const tipo           = ref<'bonus' | 'demerito' | ''>('')
+const codigoSel      = ref('')
+const equipoId       = ref('')
+const equipoApId     = ref('')
+const fecha          = ref((route.query.fecha as string) || fechaHoy())
+const hora           = ref(horaInicial())
+const hecho          = ref('')
+const alcance        = ref('equipo')
+const puntosBonus    = ref<number>(25)
+const puntosDemerito = ref<number>(0)
+const cantPersonas   = ref(1)
+const advertencia    = ref('')
 const justificacionGrupal = ref('')
 const integranteIds  = ref<string[]>([])
-const archivos         = ref<File[]>([])
-const fotosBonus       = ref<File[]>([])
-const fotosBonusUrls   = ref<string[]>([])
+const archivos       = ref<File[]>([])
+const fotosUrls      = ref<string[]>([])
 const guardando      = ref(false)
-const error          = ref('')
+const errorGuardar   = ref('')
 
-// ── Código seleccionado ────────────────────────────────────────────────────────
+// ── Código info ───────────────────────────────────────────────────────────────
 const codigoInfo = computed<IncidenciaCodigo | null>(
-  () => codigos.value.find((c) => c.codigo === codigoSel.value) ?? null,
+  () => codigos.value.find(c => c.codigo === codigoSel.value) ?? null
 )
 
-const codigosFiltrados = computed(() =>
-  tipo.value ? codigos.value.filter((c) => c.tipo === tipo.value) : [],
-)
+const puntosCalculados = computed(() => {
+  return tipo.value === 'bonus' ? puntosBonus.value : puntosDemerito.value
+})
 
 // Al cambiar tipo: auto-rellenar hora y auto-seleccionar código
 watch(tipo, (t) => {
   const now = new Date()
-  hora.value = now.toTimeString().slice(0, 5)
-  codigoSel.value = ''
+  hora.value = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
+  codigoSel.value  = ''
   puntosDemerito.value = 0
   if (t === 'bonus') {
-    const primerBonus = codigos.value.find((c) => c.tipo === 'bonus')
-    codigoSel.value = primerBonus?.codigo ?? ''
+    codigoSel.value = codigos.value.find(c => c.tipo === 'bonus')?.codigo ?? ''
   } else if (t === 'demerito') {
-    // Auto-seleccionar primer demerito sin requerimientos especiales
     const primerDemerito = codigos.value.find(
-      (c) => c.tipo === 'demerito' && !c.requiere_advertencia && !c.requiere_equipo_apoyado && !c.por_persona
+      c => c.tipo === 'demerito' && !c.requiere_advertencia && !c.requiere_equipo_apoyado && !c.por_persona
     )
-    codigoSel.value = primerDemerito?.codigo ?? ''
+    codigoSel.value      = primerDemerito?.codigo ?? ''
     puntosDemerito.value = primerDemerito?.puntos ?? 0
   }
 })
 
 // Al cambiar equipo, cargar integrantes
 watch(equipoId, async (id) => {
-  integrantes.value = []
+  integrantes.value  = []
   integranteIds.value = []
   if (id) integrantes.value = await integrantesService.getPorEquipo(id)
 })
 
-// Al cambiar código, resetear campos específicos
+// Al cambiar código, resetear campos extra
 watch(codigoSel, (nuevo) => {
-  advertenciaRef.value = ''
+  advertencia.value     = ''
   justificacionGrupal.value = ''
-  cantPersonas.value = 1
-  integranteIds.value = []
-  const cat = codigos.value.find((c) => c.codigo === nuevo)
-  puntosDemerito.value = cat?.puntos ?? 0
+  cantPersonas.value    = 1
+  integranteIds.value   = []
+  const cat = codigos.value.find(c => c.codigo === nuevo)
+  puntosDemerito.value  = cat?.puntos ?? 0
 })
 
 // D6: actualizar total al cambiar cantidad de personas
@@ -125,46 +122,42 @@ watch(cantPersonas, (n) => {
   }
 })
 
-// ── Validación por paso ───────────────────────────────────────────────────────
+function toggleIntegrante(id: string) {
+  const idx = integranteIds.value.indexOf(id)
+  if (idx >= 0) integranteIds.value.splice(idx, 1)
+  else integranteIds.value.push(id)
+}
+
+// ── Paso móvil ────────────────────────────────────────────────────────────────
+const paso = ref(1)
+
 const puedeAvanzar = computed(() => {
   switch (paso.value) {
     case 1: return !!tipo.value
     case 2: return !!equipoId.value
     case 3: {
-      if (!hora.value || hecho.value.trim().length < 10) return false
-      if (tipo.value === 'demerito') {
-        if (!puntosDemerito.value || puntosDemerito.value <= 0) return false
-      }
+      if (hecho.value.trim().length < 10) return false
+      if (tipo.value === 'demerito' && (!puntosDemerito.value || puntosDemerito.value <= 0)) return false
       return true
     }
     default: return true
   }
 })
 
-// Paso 4 obligatorio para D6
-const integrantesObligatorios = computed(() =>
-  codigoInfo.value?.codigo === 'D6' && integranteIds.value.length === 0
-)
-
-// ── Navegación ────────────────────────────────────────────────────────────────
-function avanzar() {
-  if (!puedeAvanzar.value) return
-  paso.value++
-}
+function avanzar()    { if (puedeAvanzar.value) paso.value++ }
 function retroceder() { paso.value-- }
 
 // ── Cámara ────────────────────────────────────────────────────────────────────
-const camaraActiva  = ref(false)
-const camaraError   = ref('')
-const videoRef      = ref<HTMLVideoElement | null>(null)
-const streamRef     = ref<MediaStream | null>(null)
+const camaraActiva = ref(false)
+const camaraError  = ref('')
+const videoRef     = ref<HTMLVideoElement | null>(null)
+const streamRef    = ref<MediaStream | null>(null)
 
 async function abrirCamara() {
-  camaraError.value = ''
+  camaraError.value  = ''
   camaraActiva.value = true
   await nextTick()
   try {
-    // Intentar cámara trasera primero (móvil/tablet), luego cualquier cámara (laptop)
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
@@ -172,814 +165,616 @@ async function abrirCamara() {
       stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
     }
     streamRef.value = stream
-    if (videoRef.value) {
-      videoRef.value.srcObject = stream
-    }
+    if (videoRef.value) videoRef.value.srcObject = stream
   } catch {
     camaraActiva.value = false
-    camaraError.value = 'No se pudo acceder a la cámara. Verifica los permisos del navegador.'
+    camaraError.value  = 'No se pudo acceder a la cámara.'
   }
 }
 
 function cerrarCamara() {
-  streamRef.value?.getTracks().forEach((t) => t.stop())
-  streamRef.value = null
+  streamRef.value?.getTracks().forEach(t => t.stop())
+  streamRef.value    = null
   camaraActiva.value = false
 }
 
 function capturarFoto() {
   if (!videoRef.value) return
-  const video = videoRef.value
-  const w = video.videoWidth  || video.clientWidth
-  const h = video.videoHeight || video.clientHeight
+  const v = videoRef.value
+  const w = v.videoWidth  || v.clientWidth
+  const h = v.videoHeight || v.clientHeight
   if (!w || !h) return
   const canvas = document.createElement('canvas')
-  canvas.width  = w
-  canvas.height = h
-  canvas.getContext('2d')!.drawImage(video, 0, 0, w, h)
-  canvas.toBlob((blob) => {
+  canvas.width = w; canvas.height = h
+  canvas.getContext('2d')!.drawImage(v, 0, 0, w, h)
+  canvas.toBlob(blob => {
     if (blob) {
-      const file = new File([blob], `bonus_${Date.now()}.jpg`, { type: 'image/jpeg' })
-      fotosBonus.value = [...fotosBonus.value, file]
-      fotosBonusUrls.value = [...fotosBonusUrls.value, URL.createObjectURL(blob)]
+      archivos.value  = [...archivos.value, new File([blob], `foto_${Date.now()}.jpg`, { type: 'image/jpeg' })]
+      fotosUrls.value = [...fotosUrls.value, URL.createObjectURL(blob)]
     }
-    cerrarCamara()   // cerrar DESPUÉS de guardar el blob
+    cerrarCamara()
   }, 'image/jpeg', 0.85)
 }
 
-function quitarFotoBonus(i: number) {
-  URL.revokeObjectURL(fotosBonusUrls.value[i]!)
-  fotosBonus.value    = fotosBonus.value.filter((_, idx) => idx !== i)
-  fotosBonusUrls.value = fotosBonusUrls.value.filter((_, idx) => idx !== i)
+function quitarFoto(i: number) {
+  URL.revokeObjectURL(fotosUrls.value[i]!)
+  archivos.value  = archivos.value.filter((_, idx) => idx !== i)
+  fotosUrls.value = fotosUrls.value.filter((_, idx) => idx !== i)
 }
 
-// ── Archivos ──────────────────────────────────────────────────────────────────
+// ── Archivos adjuntos ─────────────────────────────────────────────────────────
 function onArchivoChange(e: Event) {
   const input = e.target as HTMLInputElement
-  if (input.files) archivos.value = [...archivos.value, ...Array.from(input.files)]
+  if (!input.files) return
+  for (const f of Array.from(input.files)) {
+    archivos.value  = [...archivos.value, f]
+    fotosUrls.value = [...fotosUrls.value, URL.createObjectURL(f)]
+  }
   input.value = ''
 }
-function quitarArchivo(i: number) {
-  archivos.value = archivos.value.filter((_, idx) => idx !== i)
-}
+function quitarArchivo(i: number) { quitarFoto(i) }
+
+// ── Puede registrar (todos los pasos completos) ───────────────────────────────
+const puedeRegistrar = computed(() => {
+  if (!tipo.value || !codigoSel.value || !equipoId.value) return false
+  if (!hora.value || hecho.value.trim().length < 10) return false
+  if (tipo.value === 'demerito' && (!puntosDemerito.value || puntosDemerito.value <= 0)) return false
+  return true
+})
 
 // ── Guardar ───────────────────────────────────────────────────────────────────
 async function guardar() {
   if (!session.user) return
-  guardando.value = true
-  error.value = ''
-
+  guardando.value    = true
+  errorGuardar.value = ''
   try {
-    const puntos = tipo.value === 'bonus'
-      ? puntosBonus.value
-      : puntosDemerito.value
+    const puntos = tipo.value === 'bonus' ? puntosBonus.value : puntosDemerito.value
 
     const inc = await incidenciasService.crear({
-      codigo: codigoSel.value,
-      equipo_id: equipoId.value,
-      equipo_apoyado_id: null,
-      fecha: fecha.value,
-      hora: hora.value,
-      hecho: hecho.value.trim(),
-      alcance: 'equipo',
-      cantidad_personas: 1,
-      advertencia_referencia: null,
-      justificacion_grupal: null,
+      codigo:                  codigoSel.value,
+      equipo_id:               equipoId.value,
+      equipo_apoyado_id:       null,
+      fecha:                   fecha.value,
+      hora:                    hora.value,
+      hecho:                   hecho.value.trim(),
+      alcance:                 alcance.value,
+      cantidad_personas:       1,
+      advertencia_referencia:  null,
+      justificacion_grupal:    null,
       puntos,
-      registrado_por: session.user.id,
-    })
+      registrado_por:          session.user.id,
+    }, integranteIds.value)
 
-    // Fotos (bonus y demerito usan la misma cámara)
-    for (const foto of fotosBonus.value) {
-      await evidenciasService.subir(inc.id, foto, session.user.id)
+    // Subir evidencias (fotos tomadas + archivos adjuntados)
+    for (const archivo of archivos.value) {
+      await evidenciasService.subir(inc.id, archivo, session.user.id)
     }
 
     router.push(`/panel/incidencias/${inc.id}`)
   } catch (e: any) {
-    error.value = e.message ?? 'Error al guardar'
+    errorGuardar.value = e.message ?? 'Error al guardar'
   } finally {
     guardando.value = false
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function toggleIntegrante(id: string) {
-  const idx = integranteIds.value.indexOf(id)
-  if (idx >= 0) integranteIds.value.splice(idx, 1)
-  else integranteIds.value.push(id)
-}
 function nombreEquipo(id: string) {
-  return equipos.value.find((e) => e.id === id)?.nombre ?? ''
+  return equipos.value.find(e => e.id === id)?.nombre ?? ''
 }
+
+// ── Detectar si es mobile ─────────────────────────────────────────────────────
+const isMobile = computed(() => {
+  if (typeof window === 'undefined') return false
+  return window.innerWidth < 768
+})
 </script>
 
 <template>
-  <div class="wizard">
-    <div class="wizard-back">
-      <button class="btn-link" @click="router.back()">← Volver</button>
-      <h1 class="wizard-title">Nueva incidencia</h1>
+  <div class="flex flex-col min-h-full overflow-auto bg-[#F4F6F4]" style="font-family: Inter, system-ui, sans-serif">
+
+    <!-- ═══════════════════ LOADING ═══════════════════ -->
+    <div v-if="cargandoRef" class="flex-1 flex items-center justify-center p-8">
+      <svg class="animate-spin h-6 w-6 text-[#0E7C59]" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
     </div>
 
-    <!-- Indicador de pasos -->
-    <div class="wizard-steps">
-      <div
-        v-for="p in pasosActivos"
-        :key="p.n"
-        :class="['step-dot', { 'step-dot--active': paso === p.n, 'step-dot--done': paso > p.n }]"
-      >
-        <span class="step-dot__n">{{ paso > p.n ? '✓' : p.n }}</span>
-        <span class="step-dot__label">{{ p.label }}</span>
-      </div>
-    </div>
+    <template v-else>
 
-    <!-- PASO 1: Tipo -->
-    <div v-if="paso === 1" class="wizard-body">
-      <h2 class="paso-title">¿Qué tipo de incidencia?</h2>
+      <!-- ══════════════════════════════════════
+           MOBILE: wizard (< md)
+      ══════════════════════════════════════ -->
+      <div class="md:hidden flex flex-col h-full">
 
-      <div class="tipo-btns">
-        <button
-          :class="['tipo-btn', tipo === 'bonus' && 'tipo-btn--active tipo-btn--bonus']"
-          @click="tipo = 'bonus'"
-        >
-          <i class="pi pi-star-fill" />
-          <span>Bonus</span>
-          <small>+50 pts máx.</small>
-        </button>
-        <button
-          :class="['tipo-btn', tipo === 'demerito' && 'tipo-btn--active tipo-btn--demerito']"
-          @click="tipo = 'demerito'"
-        >
-          <i class="pi pi-exclamation-triangle" />
-          <span>Demérito</span>
-          <small>D1–D6</small>
-        </button>
-      </div>
-    </div>
+        <!-- Mobile header -->
+        <div class="bg-white border-b border-[#E3E7E4] px-4 pt-3 pb-4 flex-shrink-0">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-[17px] font-bold text-[#16201B]">Registrar incidencia</span>
+            <button
+              class="w-9 h-9 rounded-xl flex items-center justify-center text-[#5B6660] hover:bg-[#F4F6F4] font-[inherit]"
+              @click="router.back()"
+              aria-label="Cancelar"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <StepProgress :paso="paso" :total="4" :nombres="PASO_NOMBRES" />
+        </div>
 
-    <!-- PASO 2: Equipo -->
-    <div v-else-if="paso === 2" class="wizard-body">
-      <h2 class="paso-title">¿Qué equipo?</h2>
+        <!-- Step content -->
+        <div class="flex-1 overflow-y-auto px-4 py-5">
 
-      <div class="campo-grupo">
-        <label class="campo-label">Equipo involucrado</label>
-        <select v-model="equipoId" class="campo-input">
-          <option value="">— Selecciona —</option>
-          <option v-for="e in equipos" :key="e.id" :value="e.id">{{ e.nombre }}</option>
-        </select>
-      </div>
+          <!-- Paso 1: Tipo -->
+          <div v-if="paso === 1">
+            <h2 class="text-[16px] font-bold text-[#16201B] mb-4">Tipo</h2>
+            <CodePicker
+              :tipo="tipo"
+              @update:tipo="tipo = $event"
+              @update:codigoSel="codigoSel = $event"
+            />
+          </div>
 
-      <div v-if="codigoInfo?.requiere_equipo_apoyado" class="campo-grupo">
-        <label class="campo-label">Equipo que recibió el apoyo (B2)</label>
-        <select v-model="equipoApId" class="campo-input">
-          <option value="">— Selecciona —</option>
-          <option
-            v-for="e in equipos.filter((x) => x.id !== equipoId)"
-            :key="e.id" :value="e.id"
-          >{{ e.nombre }}</option>
-        </select>
-      </div>
-    </div>
+          <!-- Paso 2: Equipo -->
+          <div v-else-if="paso === 2">
+            <h2 class="text-[16px] font-bold text-[#16201B] mb-4">Equipo</h2>
+            <TeamGrid
+              :equipos="equipos"
+              :modelValue="equipoId"
+              @update:modelValue="equipoId = $event"
+            />
+            <!-- Equipo apoyado (B2) -->
+            <div v-if="codigoInfo?.requiere_equipo_apoyado" class="mt-4">
+              <TeamGrid
+                titulo="Equipo que recibió el apoyo"
+                :equipos="equipos"
+                :modelValue="equipoApId"
+                :excluir="equipoId"
+                @update:modelValue="equipoApId = $event"
+              />
+            </div>
+          </div>
 
-    <!-- PASO 3: Detalles — Bonus -->
-    <div v-else-if="paso === 3 && tipo === 'bonus'" class="wizard-body">
-      <h2 class="paso-title">¿Cuándo y qué pasó?</h2>
+          <!-- Paso 3: Detalles -->
+          <div v-else-if="paso === 3" class="flex flex-col gap-4">
+            <h2 class="text-[16px] font-bold text-[#16201B] mb-0">Detalles</h2>
 
-      <div class="campo-grupo">
-        <label class="campo-label">Nombre / Tipo de incidencia <small>(min. 10 caracteres)</small></label>
-        <textarea v-model="hecho" rows="4" class="campo-input" placeholder="Describe el servicio o cooperación observado…" />
-      </div>
+            <!-- Puntos bonus: selector 12.5 / 25 / 50 -->
+            <div v-if="tipo === 'bonus'" class="flex flex-col gap-1.5">
+              <label class="text-[13px] font-semibold text-[#16201B]">Puntos a aplicar</label>
+              <div class="grid grid-cols-3 gap-2">
+                <button
+                  v-for="pts in [12.5, 25, 50]"
+                  :key="pts"
+                  class="flex flex-col items-center gap-1 min-h-[64px] p-3 border-2 rounded-xl transition-colors font-[inherit]"
+                  :class="puntosBonus === pts
+                    ? 'border-[#0E7C59] bg-[#E1F3EA]'
+                    : 'border-[#E3E7E4] bg-white hover:bg-[#F4F6F4]'"
+                  @click="puntosBonus = pts"
+                >
+                  <strong class="text-[20px]" :class="puntosBonus === pts ? 'text-[#0B6B4B]' : 'text-[#16201B]'">{{ pts }}</strong>
+                  <span class="text-[12px]" :class="puntosBonus === pts ? 'text-[#0B6B4B]' : 'text-[#5B6660]'">pts</span>
+                </button>
+              </div>
+            </div>
 
-      <!-- Captura de foto -->
-      <div class="campo-grupo">
-        <label class="campo-label">Foto <small>(opcional)</small></label>
-        <button type="button" class="camara-btn" @click="abrirCamara">
-          <i class="pi pi-camera" />
-          <span>Tomar foto</span>
-        </button>
-        <p v-if="camaraError" class="error-msg">{{ camaraError }}</p>
-        <div v-if="fotosBonus.length" class="fotos-preview">
-          <div v-for="(_, i) in fotosBonus" :key="i" class="foto-thumb">
-            <img :src="fotosBonusUrls[i]" alt="foto" />
-            <button class="foto-thumb__quitar" @click="quitarFotoBonus(i)">✕</button>
+            <!-- Puntos demérito: input numérico -->
+            <div v-else-if="tipo === 'demerito'" class="flex flex-col gap-1.5">
+              <label class="text-[13px] font-semibold text-[#16201B]">
+                Puntos a aplicar <span class="text-[#A3261F]">*</span>
+              </label>
+              <input
+                v-model.number="puntosDemerito"
+                type="number"
+                min="0"
+                step="0.5"
+                class="h-11 px-3 text-[14px] border border-[#DCE1DD] rounded-xl focus:outline-none focus:border-[#0E7C59] font-[inherit] bg-white"
+                placeholder="Ej. 10"
+              />
+            </div>
+
+            <!-- Descripción del hecho -->
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[13px] font-semibold text-[#16201B]">
+                Descripción del hecho <span class="text-[#A3261F]">*</span>
+                <span class="text-[12px] font-normal text-[#5B6660] ml-1">(mín. 10 caracteres)</span>
+              </label>
+              <textarea
+                v-model="hecho"
+                rows="4"
+                placeholder="Describe el hecho objetivamente…"
+                class="w-full px-3 py-2.5 text-[14px] border border-[#DCE1DD] rounded-xl resize-none focus:outline-none focus:border-[#0E7C59] focus:ring-2 focus:ring-[#E1F3EA] font-[inherit]"
+              />
+            </div>
+
+            <!-- Advertencia previa (D1) -->
+            <div v-if="codigoInfo?.requiere_advertencia" class="flex flex-col gap-1.5">
+              <label class="text-[13px] font-semibold text-[#16201B]">Advertencia previa (referencia)</label>
+              <input
+                v-model="advertencia"
+                type="text"
+                placeholder="Hora o descripción de la advertencia previa…"
+                class="h-11 px-3 text-[14px] border border-[#DCE1DD] rounded-xl focus:outline-none focus:border-[#0E7C59] font-[inherit] bg-white"
+              />
+            </div>
+
+            <!-- Personas involucradas + integrantes (D6) -->
+            <div v-if="codigoInfo?.por_persona" class="flex flex-col gap-3">
+              <div class="flex flex-col gap-1.5">
+                <label class="text-[13px] font-semibold text-[#16201B]">
+                  Personas involucradas <span class="text-[#A3261F]">*</span>
+                </label>
+                <input
+                  v-model.number="cantPersonas"
+                  type="number"
+                  min="1"
+                  class="h-11 px-3 text-[14px] border border-[#DCE1DD] rounded-xl focus:outline-none focus:border-[#0E7C59] font-[inherit] bg-white w-28"
+                />
+              </div>
+              <!-- Integrante picker para D6 -->
+              <div v-if="integrantes.length" class="flex flex-col gap-1.5">
+                <label class="text-[13px] font-semibold text-[#16201B]">Selecciona los integrantes involucrados</label>
+                <div class="flex flex-col gap-1.5">
+                  <button
+                    v-for="int in integrantes"
+                    :key="int.id"
+                    class="flex items-center gap-2.5 h-12 px-3.5 rounded-xl border-2 text-left transition-colors font-[inherit]"
+                    :class="integranteIds.includes(int.id) ? 'border-[#0E7C59] bg-[#E1F3EA]' : 'border-[#E3E7E4] bg-white hover:bg-[#F4F6F4]'"
+                    @click="toggleIntegrante(int.id)"
+                  >
+                    <span v-if="integranteIds.includes(int.id)" class="text-[#0B6B4B] font-bold text-[13px]">✓</span>
+                    <span class="text-[14px]" :class="integranteIds.includes(int.id) ? 'font-semibold text-[#0B6B4B]' : 'text-[#16201B]'">
+                      {{ int.apellidos }}, {{ int.nombres }}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Evidencia: cámara + adjuntar archivo -->
+            <div class="flex flex-col gap-2">
+              <label class="text-[13px] font-semibold text-[#16201B]">Evidencia</label>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="flex items-center gap-2 h-11 px-4 rounded-xl border-2 border-[#0E7C59] bg-[#E1F3EA] text-[#0B6B4B] text-[13px] font-semibold font-[inherit]"
+                  @click="abrirCamara"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  Cámara
+                </button>
+                <label class="flex items-center gap-2 h-11 px-4 rounded-xl border-2 border-[#E3E7E4] bg-white text-[#16201B] text-[13px] font-semibold cursor-pointer">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  Adjuntar
+                  <input type="file" accept="image/*,video/*" multiple class="hidden" @change="onArchivoChange" />
+                </label>
+              </div>
+              <p v-if="camaraError" class="text-[12px] text-[#A3261F] m-0">{{ camaraError }}</p>
+              <div v-if="archivos.length" class="flex flex-wrap gap-2 mt-1">
+                <div v-for="(_, i) in archivos" :key="i" class="relative w-16 h-16 rounded-xl overflow-hidden border border-[#E3E7E4]">
+                  <img :src="fotosUrls[i]" alt="foto" class="w-full h-full object-cover" />
+                  <button
+                    class="absolute top-0.5 right-0.5 w-5 h-5 rounded-md bg-black/50 text-white flex items-center justify-center text-[10px]"
+                    @click="quitarArchivo(i)"
+                  >✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Paso 4: Confirmar -->
+          <div v-else-if="paso === 4" class="flex flex-col gap-0">
+            <h2 class="text-[16px] font-bold text-[#16201B] mb-4">Confirmar</h2>
+            <div class="bg-white border border-[#E3E7E4] rounded-2xl overflow-hidden">
+              <div class="divide-y divide-[#EEF1EF]">
+                <div class="flex items-center justify-between px-4 py-3 gap-3">
+                  <span class="text-[13px] text-[#5B6660]">Tipo</span>
+                  <span class="text-[13px] font-semibold" :class="tipo === 'bonus' ? 'text-[#0B6B4B]' : 'text-[#A3261F]'">
+                    {{ tipo === 'bonus' ? 'Bonus' : 'Demérito' }}
+                  </span>
+                </div>
+                <div class="flex items-center justify-between px-4 py-3 gap-3">
+                  <span class="text-[13px] text-[#5B6660]">Código</span>
+                  <span class="text-[13px] font-semibold text-[#16201B]">{{ codigoSel }} · {{ codigoInfo?.nombre }}</span>
+                </div>
+                <div class="flex items-center justify-between px-4 py-3 gap-3">
+                  <span class="text-[13px] text-[#5B6660]">Equipo</span>
+                  <span class="text-[13px] font-semibold text-[#16201B]">{{ nombreEquipo(equipoId) }}</span>
+                </div>
+                <div class="px-4 py-3 gap-3">
+                  <span class="text-[13px] text-[#5B6660] block mb-1">Descripción</span>
+                  <span class="text-[13px] text-[#16201B] leading-snug">{{ hecho }}</span>
+                </div>
+                <div class="flex items-center justify-between px-4 py-3 gap-3">
+                  <span class="text-[13px] text-[#5B6660]">Puntos</span>
+                  <span class="text-[15px] font-bold" :class="tipo === 'bonus' ? 'text-[#0B6B4B]' : 'text-[#A3261F]'">
+                    {{ tipo === 'bonus' ? '+' : '−' }}{{ puntosCalculados }}
+                  </span>
+                </div>
+                <div v-if="archivos.length" class="flex items-center justify-between px-4 py-3 gap-3">
+                  <span class="text-[13px] text-[#5B6660]">Fotos</span>
+                  <span class="text-[13px] text-[#16201B]">{{ archivos.length }} foto(s)</span>
+                </div>
+              </div>
+            </div>
+            <div class="mt-3 bg-[#EEF0EE] rounded-xl px-4 py-2.5 text-center">
+              <span class="text-[12px] font-semibold text-[#4A544F]">Quedará Registrada, pendiente de validación</span>
+            </div>
+            <p v-if="errorGuardar" class="text-[13px] text-[#A3261F] text-center mt-2 m-0">{{ errorGuardar }}</p>
           </div>
         </div>
-      </div>
 
-      <div class="campo-grupo">
-        <label class="campo-label">Puntos a aplicar</label>
-        <div class="puntos-grid">
+        <!-- Mobile footer -->
+        <div class="bg-white border-t border-[#E3E7E4] px-4 py-3 flex gap-3 flex-shrink-0">
           <button
-            v-for="pts in [12.5, 25, 50]"
-            :key="pts"
-            :class="['puntos-btn', puntosBonus === pts && 'puntos-btn--active']"
-            @click="puntosBonus = pts"
+            v-if="paso > 1"
+            class="h-[50px] px-[18px] rounded-[14px] border border-[#DCE1DD] text-[14px] font-semibold text-[#16201B] bg-white font-[inherit]"
+            :disabled="guardando"
+            @click="retroceder"
+          >Anterior</button>
+          <button
+            v-if="paso < 4"
+            class="flex-1 h-[50px] rounded-[14px] text-[14px] font-semibold text-white bg-[#0E7C59] disabled:opacity-50 font-[inherit]"
+            :disabled="!puedeAvanzar"
+            @click="avanzar"
+          >Siguiente</button>
+          <button
+            v-else
+            class="flex-1 h-[50px] rounded-[14px] text-[14px] font-semibold text-white bg-[#0E7C59] disabled:opacity-50 font-[inherit]"
+            :disabled="!puedeRegistrar || guardando"
+            @click="guardar"
           >
-            <strong>{{ pts }}</strong>
-            <span>pts</span>
+            {{ guardando ? 'Guardando…' : 'Registrar incidencia' }}
           </button>
         </div>
       </div>
-    </div>
 
-    <!-- PASO 3: Detalles — Deméritos -->
-    <div v-else-if="paso === 3 && tipo === 'demerito'" class="wizard-body">
-      <h2 class="paso-title">¿Cuándo y qué pasó?</h2>
+      <!-- ══════════════════════════════════════
+           TABLET / DESKTOP: single page (≥ md)
+      ══════════════════════════════════════ -->
+      <div class="hidden md:flex flex-col flex-1">
 
-      <div class="campo-grupo">
-        <label class="campo-label">Nombre / Tipo de incidencia <small>(min. 10 caracteres)</small></label>
-        <textarea v-model="hecho" rows="4" class="campo-input" placeholder="Describe el hecho objetivamente…" />
-      </div>
+        <!-- Desktop top bar -->
+        <div class="bg-white border-b border-[#E3E7E4] px-6 py-3 flex items-center gap-3 flex-shrink-0">
+          <button
+            class="flex items-center gap-1.5 text-[13px] font-semibold text-[#0E7C59] hover:underline font-[inherit] bg-transparent border-0 cursor-pointer"
+            @click="router.back()"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+            Volver
+          </button>
+          <div class="w-px h-4 bg-[#E3E7E4]" />
+          <span class="text-[13px] text-[#5B6660]">Evaluación / Incidencias / <strong class="text-[#16201B]">Registrar</strong></span>
+        </div>
 
-      <!-- Captura de foto -->
-      <div class="campo-grupo">
-        <label class="campo-label">Foto <small>(opcional)</small></label>
-        <button type="button" class="camara-btn" @click="abrirCamara">
-          <i class="pi pi-camera" />
-          <span>Tomar foto</span>
-        </button>
-        <p v-if="camaraError" class="error-msg">{{ camaraError }}</p>
-        <div v-if="fotosBonus.length" class="fotos-preview">
-          <div v-for="(_, i) in fotosBonus" :key="i" class="foto-thumb">
-            <img :src="fotosBonusUrls[i]" alt="foto" />
-            <button class="foto-thumb__quitar" @click="quitarFotoBonus(i)">✕</button>
+        <!-- Form + summary sidebar -->
+        <div class="flex flex-1 overflow-y-auto">
+
+          <!-- FORM (left) -->
+          <div class="flex-1 min-w-0 px-6 py-6 flex flex-col gap-6 max-w-2xl">
+
+            <!-- Section 1: Tipo -->
+            <section>
+              <div class="flex items-center gap-3 mb-4">
+                <span class="w-7 h-7 rounded-full bg-[#0E7C59] text-white text-[13px] font-bold flex items-center justify-center flex-shrink-0">1</span>
+                <h2 class="text-[15px] font-bold text-[#16201B] m-0">Tipo</h2>
+              </div>
+              <CodePicker
+                :tipo="tipo"
+                :codigoSel="codigoSel"
+                :codigos="codigos"
+                @update:tipo="tipo = $event"
+                @update:codigoSel="codigoSel = $event"
+              />
+            </section>
+
+            <!-- Section 2: Equipo -->
+            <section>
+              <div class="flex items-center gap-3 mb-4">
+                <span class="w-7 h-7 rounded-full bg-[#0E7C59] text-white text-[13px] font-bold flex items-center justify-center flex-shrink-0">2</span>
+                <h2 class="text-[15px] font-bold text-[#16201B] m-0">Equipo</h2>
+              </div>
+              <TeamGrid
+                :equipos="equipos"
+                :modelValue="equipoId"
+                @update:modelValue="equipoId = $event"
+              />
+              <!-- Equipo apoyado (B2) -->
+              <div v-if="codigoInfo?.requiere_equipo_apoyado" class="mt-4">
+                <TeamGrid
+                  titulo="Equipo que recibió el apoyo"
+                  :equipos="equipos"
+                  :modelValue="equipoApId"
+                  :excluir="equipoId"
+                  @update:modelValue="equipoApId = $event"
+                />
+              </div>
+            </section>
+
+            <!-- Section 3: ¿Qué pasó? -->
+            <section>
+              <div class="flex items-center gap-3 mb-4">
+                <span class="w-7 h-7 rounded-full bg-[#0E7C59] text-white text-[13px] font-bold flex items-center justify-center flex-shrink-0">3</span>
+                <h2 class="text-[15px] font-bold text-[#16201B] m-0">¿Qué pasó?</h2>
+              </div>
+
+              <div class="flex flex-col gap-4">
+                <!-- Puntos bonus: selector 12.5 / 25 / 50 -->
+                <div v-if="tipo === 'bonus'" class="flex flex-col gap-1.5">
+                  <label class="text-[13px] font-semibold text-[#16201B]">Puntos a aplicar</label>
+                  <div class="grid grid-cols-3 gap-2 max-w-xs">
+                    <button
+                      v-for="pts in [12.5, 25, 50]"
+                      :key="pts"
+                      class="flex flex-col items-center gap-1 min-h-[64px] p-3 border-2 rounded-xl transition-colors font-[inherit]"
+                      :class="puntosBonus === pts
+                        ? 'border-[#0E7C59] bg-[#E1F3EA]'
+                        : 'border-[#E3E7E4] bg-white hover:bg-[#F4F6F4]'"
+                      @click="puntosBonus = pts"
+                    >
+                      <strong class="text-[20px]" :class="puntosBonus === pts ? 'text-[#0B6B4B]' : 'text-[#16201B]'">{{ pts }}</strong>
+                      <span class="text-[12px]" :class="puntosBonus === pts ? 'text-[#0B6B4B]' : 'text-[#5B6660]'">pts</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Puntos demérito: input numérico -->
+                <div v-else-if="tipo === 'demerito'" class="flex flex-col gap-1.5">
+                  <label class="text-[13px] font-semibold text-[#16201B]">
+                    Puntos a aplicar <span class="text-[#A3261F]">*</span>
+                  </label>
+                  <input
+                    v-model.number="puntosDemerito"
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    class="h-11 px-3 text-[14px] border border-[#DCE1DD] rounded-xl focus:outline-none focus:border-[#0E7C59] font-[inherit] bg-white w-32"
+                    placeholder="Ej. 10"
+                  />
+                </div>
+
+                <!-- Descripción del hecho -->
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-[13px] font-semibold text-[#16201B]">
+                    Descripción del hecho <span class="text-[#A3261F]">*</span>
+                    <span class="text-[12px] font-normal text-[#5B6660] ml-1">(mín. 10 caracteres)</span>
+                  </label>
+                  <textarea
+                    v-model="hecho"
+                    rows="4"
+                    placeholder="Describe el hecho objetivamente…"
+                    class="w-full px-3 py-2.5 text-[14px] border border-[#DCE1DD] rounded-xl resize-none focus:outline-none focus:border-[#0E7C59] focus:ring-2 focus:ring-[#E1F3EA] font-[inherit]"
+                  />
+                </div>
+
+                <!-- Advertencia previa (D1) -->
+                <div v-if="codigoInfo?.requiere_advertencia" class="flex flex-col gap-1.5">
+                  <label class="text-[13px] font-semibold text-[#16201B]">Advertencia previa (referencia)</label>
+                  <input
+                    v-model="advertencia"
+                    type="text"
+                    placeholder="Hora o descripción de la advertencia previa…"
+                    class="h-11 px-3 text-[14px] border border-[#DCE1DD] rounded-xl focus:outline-none focus:border-[#0E7C59] font-[inherit] bg-white"
+                  />
+                </div>
+
+                <!-- Personas involucradas + integrantes (D6) -->
+                <div v-if="codigoInfo?.por_persona" class="flex flex-col gap-3">
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[13px] font-semibold text-[#16201B]">
+                      Personas involucradas <span class="text-[#A3261F]">*</span>
+                    </label>
+                    <input
+                      v-model.number="cantPersonas"
+                      type="number"
+                      min="1"
+                      class="h-11 px-3 text-[14px] border border-[#DCE1DD] rounded-xl focus:outline-none focus:border-[#0E7C59] font-[inherit] bg-white w-32"
+                    />
+                  </div>
+                  <!-- Integrante picker para D6 -->
+                  <div v-if="integrantes.length" class="flex flex-col gap-1.5">
+                    <label class="text-[13px] font-semibold text-[#16201B]">Selecciona los integrantes involucrados</label>
+                    <div class="flex flex-col gap-1.5">
+                      <button
+                        v-for="int in integrantes"
+                        :key="int.id"
+                        class="flex items-center gap-2.5 h-12 px-3.5 rounded-xl border-2 text-left transition-colors font-[inherit]"
+                        :class="integranteIds.includes(int.id) ? 'border-[#0E7C59] bg-[#E1F3EA]' : 'border-[#E3E7E4] bg-white hover:bg-[#F4F6F4]'"
+                        @click="toggleIntegrante(int.id)"
+                      >
+                        <span v-if="integranteIds.includes(int.id)" class="text-[#0B6B4B] font-bold text-[13px]">✓</span>
+                        <span class="text-[14px]" :class="integranteIds.includes(int.id) ? 'font-semibold text-[#0B6B4B]' : 'text-[#16201B]'">
+                          {{ int.apellidos }}, {{ int.nombres }}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Evidencia -->
+                <div class="flex flex-col gap-2">
+                  <label class="text-[13px] font-semibold text-[#16201B]">Evidencia</label>
+                  <div class="flex gap-2">
+                    <button
+                      type="button"
+                      class="flex items-center gap-2 h-11 px-4 rounded-xl border-2 border-[#0E7C59] bg-[#E1F3EA] text-[#0B6B4B] text-[14px] font-semibold font-[inherit]"
+                      @click="abrirCamara"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                      Cámara
+                    </button>
+                    <label class="flex items-center gap-2 h-11 px-4 rounded-xl border-2 border-[#E3E7E4] bg-white text-[#16201B] text-[14px] font-semibold cursor-pointer">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                      Adjuntar
+                      <input type="file" accept="image/*,video/*" multiple class="hidden" @change="onArchivoChange" />
+                    </label>
+                  </div>
+                  <p v-if="camaraError" class="text-[12px] text-[#A3261F] m-0">{{ camaraError }}</p>
+                  <div v-if="archivos.length" class="flex flex-wrap gap-2">
+                    <div v-for="(_, i) in archivos" :key="i" class="relative w-16 h-16 rounded-xl overflow-hidden border border-[#E3E7E4]">
+                      <img :src="fotosUrls[i]" alt="foto" class="w-full h-full object-cover" />
+                      <button
+                        class="absolute top-0.5 right-0.5 w-5 h-5 rounded-md bg-black/50 text-white flex items-center justify-center text-[10px]"
+                        @click="quitarFoto(i)"
+                      >✕</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- SUMMARY SIDEBAR (right) -->
+          <div class="hidden lg:block w-[280px] flex-shrink-0 p-6 border-l border-[#E3E7E4]">
+            <SummaryPanel
+              :tipo="tipo"
+              :codigoInfo="codigoInfo"
+              :equipoNombre="nombreEquipo(equipoId)"
+              :hecho="hecho"
+              :fecha="fecha"
+              :hora="hora"
+              :puntos="puntosCalculados"
+              :guardando="guardando"
+              :puedeRegistrar="puedeRegistrar"
+              :error="errorGuardar"
+              @registrar="guardar"
+            />
           </div>
         </div>
-      </div>
 
-      <div class="campo-grupo">
-        <label class="campo-label">Puntos a aplicar <span class="req">*</span></label>
-        <input v-model.number="puntosDemerito" type="number" min="0" step="0.5" class="campo-input" placeholder="Ej. 10" />
-      </div>
-    </div>
-
-    <!-- PASO 4 (Bonus): Confirmar -->
-    <div v-else-if="paso === 4 && tipo === 'bonus'" class="wizard-body">
-      <h2 class="paso-title">Confirmar registro</h2>
-
-      <div class="resumen">
-        <div class="resumen-fila">
-          <span class="resumen-label">Tipo</span>
-          <span><span class="badge badge--azul">BONUS</span> {{ codigoInfo?.nombre }}</span>
-        </div>
-        <div class="resumen-fila">
-          <span class="resumen-label">Equipo</span>
-          <span>{{ nombreEquipo(equipoId) }}</span>
-        </div>
-        <div class="resumen-fila">
-          <span class="resumen-label">Fecha / Hora</span>
-          <span>{{ fecha }} {{ hora }}</span>
-        </div>
-        <div class="resumen-fila">
-          <span class="resumen-label">Nombre</span>
-          <span>{{ hecho }}</span>
-        </div>
-        <div class="resumen-fila">
-          <span class="resumen-label">Puntos</span>
-          <strong>{{ puntosBonus }} pts</strong>
-        </div>
-        <div v-if="fotosBonus.length" class="resumen-fila">
-          <span class="resumen-label">Fotos</span>
-          <span>{{ fotosBonus.length }} foto(s)</span>
-        </div>
-        <div class="resumen-fila resumen-fila--nota">
-          <span class="resumen-label">Estado</span>
-          <span class="badge badge--gris">Registrado (pendiente de validación)</span>
+        <!-- Tablet footer (lg:hidden) — tablet doesn't have wide sidebar -->
+        <div class="lg:hidden bg-white border-t border-[#E3E7E4] px-6 py-3 flex items-center justify-between gap-4 flex-shrink-0">
+          <span v-if="codigoInfo" class="text-[13px] text-[#5B6660]">
+            Código {{ codigoSel }} ·
+            <strong class="font-bold" :class="tipo === 'bonus' ? 'text-[#0B6B4B]' : 'text-[#A3261F]'">
+              {{ tipo === 'bonus' ? '+' : '−' }}{{ puntosCalculados }} pts
+            </strong>
+          </span>
+          <span v-else class="text-[13px] text-[#8A948E]">Selecciona tipo y código</span>
+          <p v-if="errorGuardar" class="text-[12px] text-[#A3261F] m-0">{{ errorGuardar }}</p>
+          <button
+            class="h-11 px-6 rounded-xl text-[14px] font-semibold text-white bg-[#0E7C59] hover:bg-[#0B6B4B] transition-colors disabled:opacity-50 font-[inherit] flex-shrink-0"
+            :disabled="!puedeRegistrar || guardando"
+            @click="guardar"
+          >
+            {{ guardando ? 'Guardando…' : 'Registrar incidencia' }}
+          </button>
         </div>
       </div>
 
-      <div v-if="error" class="error-msg">{{ error }}</div>
-    </div>
-
-    <!-- PASO 4: Confirmar (solo demerito) -->
-    <div v-else-if="paso === 4 && tipo === 'demerito'" class="wizard-body">
-      <h2 class="paso-title">Confirmar registro</h2>
-
-      <div class="resumen">
-        <div class="resumen-fila">
-          <span class="resumen-label">Tipo</span>
-          <span><span class="badge badge--naranja">{{ codigoSel }}</span> {{ codigoInfo?.nombre }}</span>
-        </div>
-        <div class="resumen-fila">
-          <span class="resumen-label">Equipo</span>
-          <span>{{ nombreEquipo(equipoId) }}</span>
-        </div>
-        <div class="resumen-fila">
-          <span class="resumen-label">Fecha / Hora</span>
-          <span>{{ fecha }} {{ hora }}</span>
-        </div>
-        <div class="resumen-fila">
-          <span class="resumen-label">Descripción</span>
-          <span>{{ hecho }}</span>
-        </div>
-        <div class="resumen-fila">
-          <span class="resumen-label">Puntos</span>
-          <strong>−{{ puntosDemerito }} pts</strong>
-        </div>
-        <div v-if="fotosBonus.length" class="resumen-fila">
-          <span class="resumen-label">Fotos</span>
-          <span>{{ fotosBonus.length }} foto(s)</span>
-        </div>
-        <div class="resumen-fila resumen-fila--nota">
-          <span class="resumen-label">Estado</span>
-          <span class="badge badge--gris">Registrado (pendiente de validación)</span>
-        </div>
-      </div>
-
-      <div v-if="error" class="error-msg">{{ error }}</div>
-    </div>
-
-    <!-- Navegación -->
-    <div class="wizard-nav">
-      <button v-if="paso > 1" class="btn btn--ghost" :disabled="guardando" @click="retroceder">
-        ← Anterior
-      </button>
-      <div class="wizard-nav__right">
-        <button
-          v-if="paso < pasoFinal"
-          class="btn btn--primary"
-          :disabled="!puedeAvanzar"
-          @click="avanzar"
-        >
-          Siguiente →
-        </button>
-        <button
-          v-else
-          class="btn btn--primary"
-          :disabled="guardando"
-          @click="guardar"
-        >
-          <i v-if="guardando" class="pi pi-spin pi-spinner" />
-          {{ guardando ? 'Guardando…' : 'Registrar incidencia' }}
-        </button>
-      </div>
-    </div>
+    </template>
   </div>
 
-  <!-- Modal cámara -->
+  <!-- ═══════════════════ CAMERA MODAL ═══════════════════ -->
   <teleport to="body">
-    <div v-if="camaraActiva" class="camara-overlay">
-      <div class="camara-modal">
-        <video ref="videoRef" autoplay playsinline class="camara-video" />
-        <div class="camara-modal__btns">
-          <button type="button" class="btn btn--ghost" @click="cerrarCamara">Cancelar</button>
-          <button type="button" class="btn btn--primary camara-capturar" @click="capturarFoto">
-            <i class="pi pi-camera" /> Capturar
+    <div v-if="camaraActiva" class="fixed inset-0 bg-black/88 z-[9999] flex items-center justify-center p-4">
+      <div class="flex flex-col gap-4 w-full max-w-sm">
+        <video ref="videoRef" autoplay playsinline class="w-full rounded-2xl bg-black max-h-[60dvh] object-cover" />
+        <div class="flex gap-3 justify-center">
+          <button class="h-11 px-5 rounded-xl border border-white/30 text-white text-[14px] font-semibold font-[inherit]" @click="cerrarCamara">Cancelar</button>
+          <button class="h-11 px-5 rounded-xl bg-[#0E7C59] text-white text-[14px] font-semibold font-[inherit]" @click="capturarFoto">
+            <svg class="inline-block mr-1.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Capturar
           </button>
         </div>
       </div>
     </div>
   </teleport>
 </template>
-
-<style scoped>
-.wizard {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: 0 1rem 2rem;
-}
-
-/* ── Header ── */
-.wizard-back {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-}
-.wizard-title { font-size: 1.2rem; font-weight: 800; margin: 0; }
-.btn-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  background: none;
-  border: none;
-  color: #16a34a;
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-  min-height: 44px;
-}
-.btn-link:hover { text-decoration: underline; }
-
-/* ── Steps ── */
-.wizard-steps {
-  display: flex;
-  gap: 0;
-  margin-bottom: 1.5rem;
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-.step-dot {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-  flex: 1;
-  min-width: 52px;
-  position: relative;
-}
-.step-dot:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  top: 15px;
-  left: calc(50% + 16px);
-  right: calc(-50% + 16px);
-  height: 2px;
-  background: #e5e7eb;
-}
-.step-dot--done:not(:last-child)::after { background: #16a34a; }
-
-.step-dot__n {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.82rem;
-  font-weight: 800;
-  background: #e5e7eb;
-  color: #9ca3af;
-  position: relative;
-  z-index: 1;
-  transition: all 0.15s;
-}
-.step-dot--active .step-dot__n { background: #16a34a; color: white; box-shadow: 0 0 0 4px rgba(22,163,74,.2); }
-.step-dot--done .step-dot__n   { background: #15803d; color: white; }
-.step-dot__label {
-  font-size: 0.62rem;
-  color: #9ca3af;
-  text-align: center;
-  line-height: 1.2;
-}
-.step-dot--active .step-dot__label { color: #16a34a; font-weight: 700; }
-.step-dot--done .step-dot__label   { color: #15803d; }
-
-/* ── Body ── */
-.wizard-body {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 1.25rem;
-  margin-bottom: 1rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,.06);
-}
-.paso-title { font-size: 1.05rem; font-weight: 800; margin: 0 0 0.75rem; color: #111827; }
-.paso-desc  { font-size: 0.88rem; color: #6b7280; margin: 0 0 0.75rem; line-height: 1.45; }
-
-/* ── Tipo botones ── */
-.tipo-btns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-.tipo-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.35rem;
-  min-height: 96px;
-  padding: 1rem;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  background: white;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.tipo-btn i    { font-size: 1.6rem; }
-.tipo-btn span { font-weight: 700; font-size: 0.9rem; }
-.tipo-btn small { font-size: 0.8rem; color: #9ca3af; }
-.tipo-btn:not(.tipo-btn--bonus):not(.tipo-btn--demerito):hover { border-color: #d1d5db; background: #f9fafb; }
-.tipo-btn--bonus    { border-color: #16a34a; background: #f0fdf4; }
-.tipo-btn--bonus i  { color: #16a34a; }
-.tipo-btn--demerito { border-color: #dc2626; background: #fef2f2; }
-.tipo-btn--demerito i { color: #dc2626; }
-
-/* ── Código grid ── */
-.codigo-grid { display: flex; flex-direction: column; gap: 0.5rem; }
-.codigo-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-height: 54px;
-  padding: 0.65rem 0.85rem;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
-  background: white;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.15s;
-}
-.codigo-btn:hover { border-color: #d1d5db; background: #f9fafb; }
-.codigo-btn strong { min-width: 34px; font-size: 0.9rem; color: #111827; }
-.codigo-btn span   { flex: 1; font-size: 0.88rem; color: #374151; }
-.codigo-btn em     { font-size: 0.8rem; color: #9ca3af; font-style: normal; white-space: nowrap; }
-.codigo-btn--active { border-color: #16a34a; background: #f0fdf4; }
-.codigo-btn--active strong { color: #15803d; }
-
-/* Info box */
-.codigo-info-box {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-  background: #f0fdf4;
-  border: 1px solid #dcfce7;
-  border-radius: 8px;
-  font-size: 0.82rem;
-  color: #374151;
-}
-.codigo-info-box p { margin: 0.2rem 0; }
-.info--advertencia { color: #b45309; }
-.info--b2 { color: #15803d; }
-
-/* ── Campos ── */
-.campo-grupo { margin-bottom: 1rem; }
-.campo-label {
-  display: block;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #374151;
-  margin-bottom: 0.3rem;
-}
-.campo-input {
-  width: 100%;
-  min-height: 48px;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  background: white;
-  box-sizing: border-box;
-  transition: border-color 0.15s;
-}
-.campo-input:focus { outline: none; border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,.15); }
-textarea.campo-input { resize: vertical; min-height: 88px; }
-.campo-hint { font-size: 0.8rem; color: #6b7280; margin-top: 0.25rem; display: block; }
-.req { color: #dc2626; }
-
-/* ── Integrantes ── */
-.integrantes-grid { display: flex; flex-direction: column; gap: 0.5rem; }
-.integrante-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-height: 52px;
-  padding: 0.6rem 0.85rem;
-  border: 2px solid #e5e7eb;
-  border-radius: 10px;
-  background: white;
-  cursor: pointer;
-  font-size: 0.9rem;
-  text-align: left;
-  transition: all 0.15s;
-}
-.integrante-btn:hover { border-color: #d1d5db; background: #f9fafb; }
-.integrante-btn--sel { border-color: #16a34a; background: #f0fdf4; font-weight: 600; }
-.integrante-btn--sel::before {
-  content: '✓';
-  color: #16a34a;
-  font-weight: 900;
-  margin-right: 0.25rem;
-}
-.integrante-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.tag-expulsado {
-  font-size: 0.7rem;
-  background: #fee2e2;
-  color: #991b1b;
-  border-radius: 4px;
-  padding: 0.1rem 0.35rem;
-  margin-left: auto;
-  font-weight: 600;
-}
-
-/* ── Upload ── */
-.upload-area {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 2rem 1.5rem;
-  border: 2px dashed #d1d5db;
-  border-radius: 12px;
-  cursor: pointer;
-  text-align: center;
-  margin-bottom: 1rem;
-  transition: all 0.15s;
-  background: #fafafa;
-}
-.upload-area:hover { border-color: #16a34a; background: #f0fdf4; }
-.upload-area input  { display: none; }
-.upload-area i      { font-size: 2rem; color: #9ca3af; }
-.upload-area span   { font-size: 0.9rem; color: #374151; font-weight: 600; }
-.upload-area small  { font-size: 0.8rem; color: #9ca3af; }
-
-.archivos-lista { display: flex; flex-direction: column; gap: 0.4rem; }
-.archivo-chip {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.65rem;
-  background: #f0fdf4;
-  border: 1px solid #dcfce7;
-  border-radius: 8px;
-  font-size: 0.82rem;
-}
-.archivo-chip__nombre { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.archivo-chip__quitar {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #9ca3af;
-  font-size: 0.85rem;
-  min-height: 32px;
-  min-width: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-}
-.archivo-chip__quitar:hover { background: #fee2e2; color: #dc2626; }
-
-/* ── Resumen ── */
-.resumen { display: flex; flex-direction: column; gap: 0; }
-.resumen-fila {
-  display: flex;
-  gap: 0.75rem;
-  font-size: 0.88rem;
-  align-items: flex-start;
-  padding: 0.55rem 0;
-  border-bottom: 1px solid #f3f4f6;
-}
-.resumen-fila:last-child { border-bottom: none; }
-.resumen-label {
-  min-width: 110px;
-  font-weight: 700;
-  color: #6b7280;
-  flex-shrink: 0;
-  font-size: 0.8rem;
-}
-
-/* ── Badges ── */
-.badge {
-  border-radius: 4px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.15rem 0.45rem;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.badge--azul    { background: #dcfce7; color: #166534; }
-.badge--naranja { background: #fed7aa; color: #c2410c; }
-.badge--gris    { background: #f3f4f6; color: #374151; }
-
-/* ── Navegación ── */
-.wizard-nav {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 0;
-  gap: 0.5rem;
-}
-.wizard-nav__right { margin-left: auto; }
-
-/* ── Botones ── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  min-height: 48px;
-  padding: 0.55rem 1.2rem;
-  border-radius: 8px;
-  border: none;
-  font-size: 0.95rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
-}
-.btn--primary { background: #16a34a; color: white; }
-.btn--primary:hover:not(:disabled) { background: #15803d; }
-.btn--primary:active:not(:disabled) { transform: scale(0.98); }
-.btn--primary:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn--ghost { background: transparent; color: #374151; border: 1px solid #d1d5db; }
-.btn--ghost:hover:not(:disabled) { background: #f0fdf4; }
-.btn--ghost:disabled { opacity: 0.5; }
-
-.error-msg { color: #dc2626; font-size: 0.83rem; margin-top: 0.5rem; }
-
-/* ── Cámara bonus ── */
-.camara-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-height: 48px;
-  padding: 0.6rem 1.1rem;
-  border: 2px solid #16a34a;
-  border-radius: 10px;
-  background: #f0fdf4;
-  color: #15803d;
-  font-size: 0.9rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.camara-btn:hover { background: #dcfce7; }
-.camara-btn i { font-size: 1.2rem; }
-
-
-.fotos-preview {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.6rem;
-}
-.foto-thumb {
-  position: relative;
-  width: 80px;
-  height: 80px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 2px solid #d1d5db;
-}
-.foto-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.foto-thumb__quitar {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  background: rgba(0,0,0,.55);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  width: 22px;
-  height: 22px;
-  font-size: 0.7rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* ── Puntos bonus ── */
-.puntos-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.6rem;
-}
-.puntos-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
-  min-height: 64px;
-  padding: 0.75rem;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  background: white;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.puntos-btn strong { font-size: 1.3rem; color: #111827; }
-.puntos-btn span   { font-size: 0.75rem; color: #9ca3af; font-weight: 600; }
-.puntos-btn:hover  { border-color: #d1d5db; background: #f9fafb; }
-.puntos-btn--active { border-color: #16a34a; background: #f0fdf4; }
-.puntos-btn--active strong { color: #15803d; }
-.puntos-btn--active span   { color: #16a34a; }
-</style>
-
-<!-- Estilos globales para el modal de cámara (teleport sale del scoped) -->
-<style>
-.camara-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.88);
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-}
-.camara-modal {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  width: 100%;
-  max-width: 480px;
-}
-.camara-video {
-  width: 100%;
-  border-radius: 12px;
-  background: #000;
-  max-height: 60dvh;
-  object-fit: cover;
-}
-.camara-modal__btns {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: center;
-}
-.camara-capturar { min-width: 140px; justify-content: center; }
-</style>

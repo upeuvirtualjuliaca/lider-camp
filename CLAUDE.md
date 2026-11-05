@@ -54,6 +54,11 @@ supabase/
   seed.sql
 docs/
   Guia_Lidercamp_2026-II.docx   ← guía oficial del campamento
+  diseno/
+    inicio/                      ← maquetas del panel home
+    guia-estilo-movil.md         ← paleta, tipografía, espaciados globales
+    <grupo-del-menú>/
+      <módulo>/                  ← maquetas del módulo (ej. evaluación/evaluar/)
 ```
 
 ---

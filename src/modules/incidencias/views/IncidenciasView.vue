@@ -10,41 +10,51 @@ import {
   codigosService,
   bonusService,
   demeritorService,
+  evidenciasService,
   type Incidencia,
   type IncidenciaCodigo,
+  type IncidenciaDetalle,
   type BonusEquipo,
   type DemeritoEquipo,
 } from '@/modules/incidencias/services/incidencias.service'
 import { equiposService, type Equipo } from '@/modules/equipos/services/equipos.service'
+import IncidentRow from '../components/IncidentRow.vue'
+import IncidentDetail from '../components/IncidentDetail.vue'
 
 const session   = useSessionStore()
 const campStore = useCampamentoStore()
 const router    = useRouter()
 
 const { momentos, fechas, cargar: cargarCampamento, labelDia, detectarMomentoActual } = useDiasCampamento()
-const momentoActivo   = ref<string>('')
-const momentosConProg = ref<string[]>([])
+const momentoActivo    = ref('')
+const momentosConProg  = ref<string[]>([])
 
 // ── Estado ────────────────────────────────────────────────────────────────────
-const cargando  = ref(true)
-const error     = ref('')
-const lista     = ref<Incidencia[]>([])
-const codigos   = ref<IncidenciaCodigo[]>([])
-const equipos   = ref<Equipo[]>([])
-const bonusList = ref<BonusEquipo[]>([])
-const demeList  = ref<DemeritoEquipo[]>([])
+const cargando   = ref(true)
+const error      = ref('')
+const lista      = ref<Incidencia[]>([])
+const codigos    = ref<IncidenciaCodigo[]>([])
+const equipos    = ref<Equipo[]>([])
+const bonusList  = ref<BonusEquipo[]>([])
+const demeList   = ref<DemeritoEquipo[]>([])
 
 const filtTab    = ref<'todas' | 'bonus' | 'demerito' | 'pendiente'>('todas')
 const filtEquipo = ref('')
 const modalOpen  = ref(false)
 
-// ── Fecha de hoy (local, sin offset UTC) ──────────────────────────────────────
+// ── Detalle inline (web/tablet) ───────────────────────────────────────────────
+const incActiva      = ref<IncidenciaDetalle | null>(null)
+const cargandoDet    = ref(false)
+const evidenciaUrls  = ref<Record<string, string>>({})
+const cargandoValid  = ref(false)
+
+// ── Fecha de hoy ──────────────────────────────────────────────────────────────
 const hoy = computed(() => {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 })
 
-// ── Fecha de inicio del campamento (primer día en dias_campamento) ─────────────
+// ── Puede registrar ───────────────────────────────────────────────────────────
 const fechaInicio = computed(() => {
   if (momentos.value.length === 0) return null
   return fechas.value[momentos.value[0] ?? ''] ?? null
@@ -55,7 +65,6 @@ const labelFechaInicio = computed(() => {
   return labelDia(momentos.value[0] ?? '')
 })
 
-// ── Regla: puede registrar desde el 1er día EXCEPTO el último ─────────────────
 const puedeRegistrar = computed(() => {
   if (momentos.value.length === 0) return false
   const primerFecha = fechas.value[momentos.value[0] ?? '']
@@ -77,7 +86,6 @@ const motivoNoRegistrar = computed(() => {
 // ── Carga inicial ─────────────────────────────────────────────────────────────
 async function cargar() {
   if (codigos.value.length > 0 && equipos.value.length > 0 && !navigator.onLine) return
-
   cargando.value = true
   error.value = ''
   try {
@@ -91,7 +99,7 @@ async function cargar() {
     ])
     if (campStore.selectedId) {
       const campId = campStore.selectedId
-      const momentos = await cachedFetch<string[]>(`prog_momentos_${campId}`, async () => {
+      const moms = await cachedFetch<string[]>(`prog_momentos_${campId}`, async () => {
         const { supabase } = await import('@/lib/supabase')
         const { data: progData } = await supabase
           .from('programacion')
@@ -100,12 +108,12 @@ async function cargar() {
           .eq('estado', 'programado')
         return [...new Set((progData ?? []).map((r: any) => r.momento as string))]
       }, TTL_1H)
-      momentosConProg.value = momentos
+      momentosConProg.value = moms
     }
     momentoActivo.value = detectarMomentoActual()
-    lista.value     = inc
-    codigos.value   = cod
-    equipos.value   = eq
+    lista.value    = inc
+    codigos.value  = cod
+    equipos.value  = eq
     bonusList.value = bon
     demeList.value  = dem
   } catch (e: any) {
@@ -121,835 +129,510 @@ watch(() => campStore.selectedId, cargar)
 // ── Computed ──────────────────────────────────────────────────────────────────
 const codigoPorCodigo = computed(() => {
   const m = new Map<string, IncidenciaCodigo>()
-  codigos.value.forEach((c) => m.set(c.codigo, c))
+  codigos.value.forEach(c => m.set(c.codigo, c))
   return m
 })
 
-function tipoDe(codigo: string) {
-  return codigoPorCodigo.value.get(codigo)?.tipo ?? 'demerito'
+function tipoDe(codigo: string): 'bonus' | 'demerito' {
+  return codigoPorCodigo.value.get(codigo)?.tipo === 'bonus' ? 'bonus' : 'demerito'
 }
 
 const listaDia = computed(() => {
+  if (!momentoActivo.value) return lista.value
   const fecha = fechas.value[momentoActivo.value]
   if (!fecha) return lista.value
-  return lista.value.filter((inc) => inc.fecha === fecha)
+  return lista.value.filter(inc => inc.fecha === fecha)
 })
 
 const listaFiltrada = computed(() => {
-  return listaDia.value.filter((inc) => {
+  return listaDia.value.filter(inc => {
     if (filtTab.value === 'bonus'     && tipoDe(inc.codigo) !== 'bonus')     return false
     if (filtTab.value === 'demerito'  && tipoDe(inc.codigo) !== 'demerito')  return false
-    if (filtTab.value === 'pendiente' && inc.estado !== 'registrado')        return false
-    if (filtEquipo.value && inc.equipo_id !== filtEquipo.value)              return false
+    if (filtTab.value === 'pendiente' && inc.estado !== 'registrado' && inc.estado !== 'descargo') return false
+    if (filtEquipo.value && inc.equipo_id !== filtEquipo.value) return false
     return true
   })
 })
 
-const cntBonus     = computed(() => listaDia.value.filter(i => tipoDe(i.codigo) === 'bonus').length)
-const cntDemerito  = computed(() => listaDia.value.filter(i => tipoDe(i.codigo) === 'demerito').length)
-const cntPendiente = computed(() => listaDia.value.filter(i => i.estado === 'registrado').length)
+// Summary cards (solo validadas, por día activo)
+const bonusValidados     = computed(() => listaDia.value.filter(i => tipoDe(i.codigo) === 'bonus'    && i.estado === 'validado'))
+const demeritosValidados = computed(() => listaDia.value.filter(i => tipoDe(i.codigo) === 'demerito' && i.estado === 'validado'))
+const porValidar         = computed(() => listaDia.value.filter(i => i.estado === 'registrado' || i.estado === 'descargo'))
 
 const bonusPts    = computed(() => bonusList.value.reduce((s, b) => s + (b.bonus_codigo ?? 0), 0))
 const demeritoPts = computed(() => demeList.value.reduce((s, d) => s + (d.demeritos_codigo ?? 0), 0))
+const bonusTotal  = computed(() => listaDia.value.filter(i => tipoDe(i.codigo) === 'bonus').length)
+
+const cntBonus    = computed(() => listaDia.value.filter(i => tipoDe(i.codigo) === 'bonus').length)
+const cntDemerito = computed(() => listaDia.value.filter(i => tipoDe(i.codigo) === 'demerito').length)
+const cntPendiente = computed(() => porValidar.value.length)
 
 const bonusCodigos    = computed(() => codigos.value.filter(c => c.tipo === 'bonus'))
 const demeritoCodigos = computed(() => codigos.value.filter(c => c.tipo === 'demerito'))
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const ESTADO_CFG: Record<string, { label: string; cls: string }> = {
-  registrado: { label: 'Pendiente', cls: 'st--amber' },
-  validado:   { label: 'Validado',  cls: 'st--green' },
-  rechazado:  { label: 'Rechazado', cls: 'st--red'   },
-}
-
 function nombreEquipo(id: string) {
   return equipos.value.find(e => e.id === id)?.nombre ?? '—'
 }
 
-function colorEquipo(id: string) {
-  return equipos.value.find(e => e.id === id)?.color ?? '#94a3b8'
+function labelDiaCorto(m: string) {
+  const label = labelDia(m)
+  const parts = label.split(' ')
+  return parts.length >= 2 ? (parts[0] ?? '').slice(0, 3) + ' ' + (parts[1] ?? '') : label
+}
+
+// ── Click en fila ─────────────────────────────────────────────────────────────
+async function onRowClick(id: string) {
+  if (typeof window !== 'undefined' && window.innerWidth < 768) {
+    router.push(`/panel/incidencias/${id}`)
+    return
+  }
+  if (incActiva.value?.id === id) return
+  cargandoDet.value   = true
+  incActiva.value     = null
+  evidenciaUrls.value = {}
+  try {
+    const det = await incidenciasService.getPorId(id)
+    if (!det) return
+    incActiva.value = det
+    for (const ev of det.evidencias) {
+      evidenciaUrls.value[ev.id] = await evidenciasService.getUrl(ev.ruta_archivo)
+    }
+  } finally {
+    cargandoDet.value = false
+  }
+}
+
+// ── Validar / Rechazar ────────────────────────────────────────────────────────
+async function onValidar(motivo: string) {
+  if (!incActiva.value) return
+  cargandoValid.value = true
+  try {
+    await incidenciasService.validar(incActiva.value.id, motivo)
+    await cargar()
+    if (incActiva.value) {
+      const det = await incidenciasService.getPorId(incActiva.value.id)
+      if (det) incActiva.value = det
+    }
+  } finally {
+    cargandoValid.value = false
+  }
+}
+
+async function onRechazar(motivo: string) {
+  if (!incActiva.value) return
+  cargandoValid.value = true
+  try {
+    await incidenciasService.rechazar(incActiva.value.id, motivo)
+    await cargar()
+    if (incActiva.value) {
+      const det = await incidenciasService.getPorId(incActiva.value.id)
+      if (det) incActiva.value = det
+    }
+  } finally {
+    cargandoValid.value = false
+  }
 }
 </script>
 
 <template>
-  <div class="inc-page">
+  <div class="flex flex-col h-full overflow-hidden bg-[#F4F6F4]" style="font-family: Inter, system-ui, sans-serif">
 
-    <!-- ══════════ TOPBAR ══════════ -->
-    <div class="inc-topbar">
-      <div class="inc-topbar__left"></div>
-      <div class="inc-topbar__right">
-        <button class="inc-btn-help" title="¿Cómo funciona?" @click="modalOpen = true">
-          <i class="pi pi-question-circle" />
+    <!-- ═══════════════════ LOADING ═══════════════════ -->
+    <div v-if="cargando" class="flex-1 flex flex-col items-center justify-center gap-3 text-[#5B6660]">
+      <div class="flex flex-col gap-3 w-full max-w-md px-4">
+        <div class="h-10 bg-[#E3E7E4] rounded-xl animate-pulse" />
+        <div class="grid grid-cols-3 gap-2">
+          <div v-for="n in 3" :key="n" class="h-20 bg-[#E3E7E4] rounded-2xl animate-pulse" />
+        </div>
+        <div v-for="n in 4" :key="n" class="h-16 bg-[#E3E7E4] rounded-2xl animate-pulse" />
+      </div>
+    </div>
+
+    <!-- ═══════════════════ ERROR ═══════════════════ -->
+    <div v-else-if="error" class="flex-1 flex flex-col items-center justify-center gap-4 p-6">
+      <p class="text-[15px] text-[#16201B] text-center">{{ error }}</p>
+      <button @click="cargar" class="h-10 px-5 rounded-xl bg-[#0E7C59] text-white text-[14px] font-semibold font-[inherit]">Reintentar</button>
+    </div>
+
+    <!-- ═══════════════════ CONTENT ═══════════════════ -->
+    <template v-else>
+
+      <!-- ── TABLET / DESKTOP top bar ─────────────────── -->
+      <div class="hidden md:flex items-center gap-3 px-5 py-3 bg-white border-b border-[#E3E7E4] flex-shrink-0 overflow-x-auto">
+        <span class="text-[13px] text-[#5B6660] flex-shrink-0">
+          Evaluación / <strong class="text-[#16201B]">Incidencias</strong>
+        </span>
+        <div class="w-px h-5 bg-[#E3E7E4] flex-shrink-0" />
+
+        <!-- Day tabs -->
+        <div class="flex gap-1.5 flex-shrink-0">
+          <button
+            class="flex-shrink-0 h-9 px-3.5 rounded-[10px] text-[13px] font-semibold border transition-colors font-[inherit]"
+            :class="momentoActivo === '' ? 'bg-[#0E7C59] text-white border-[#0E7C59]' : 'bg-white text-[#16201B] border-[#DCE1DD] hover:bg-[#F4F6F4]'"
+            @click="momentoActivo = ''"
+          >Todos</button>
+          <button
+            v-for="m in momentos"
+            :key="m"
+            class="flex-shrink-0 h-9 px-3.5 rounded-[10px] text-[13px] font-semibold border transition-colors font-[inherit]"
+            :class="momentoActivo === m ? 'bg-[#0E7C59] text-white border-[#0E7C59]' : 'bg-white text-[#16201B] border-[#DCE1DD] hover:bg-[#F4F6F4]'"
+            @click="momentoActivo = m"
+          >
+            {{ labelDiaCorto(m) }}<template v-if="fechas[m] === hoy"> · Hoy</template>
+          </button>
+        </div>
+
+        <div class="flex-1" />
+
+        <!-- Help button -->
+        <button
+          class="flex-shrink-0 w-9 h-9 rounded-xl border border-[#DCE1DD] bg-white text-[#5B6660] hover:text-[#0E7C59] hover:border-[#0E7C59] flex items-center justify-center transition-colors"
+          title="¿Cómo funciona?"
+          @click="modalOpen = true"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         </button>
+
+        <!-- Registrar button -->
         <router-link
           v-if="puedeRegistrar"
           :to="`/panel/incidencias/nueva${momentoActivo && fechas[momentoActivo] ? '?fecha=' + fechas[momentoActivo] : ''}`"
-          class="inc-btn-new"
+          class="flex-shrink-0 flex items-center gap-1.5 h-9 px-4 rounded-[10px] bg-[#0E7C59] text-white text-[13px] font-semibold hover:bg-[#0B6B4B] transition-colors font-[inherit]"
+          style="color: #fff"
         >
-          <i class="pi pi-plus" /> Registrar
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Registrar incidencia
         </router-link>
-        <span v-else-if="!cargando" class="inc-btn-new inc-btn-new--off" :title="motivoNoRegistrar">
-          <i class="pi pi-lock" /> Registrar
-        </span>
-      </div>
-    </div>
-
-    <!-- ══════════ AVISO BLOQUEO ══════════ -->
-    <div v-if="!cargando && motivoNoRegistrar" class="inc-aviso">
-      <i class="pi pi-info-circle" />
-      <div>
-        <span>{{ motivoNoRegistrar }}</span>
-        <span v-if="fechaInicio && hoy < fechaInicio" class="inc-aviso__fecha">
-          Inicio: <strong>{{ labelFechaInicio }}</strong> ({{ fechaInicio }})
-        </span>
-      </div>
-    </div>
-
-    <!-- ══════════ SELECTOR DE DÍAS ══════════ -->
-    <div v-if="momentos.length" class="inc-dias-wrap">
-      <div class="inc-dias">
-        <button
-          v-for="m in momentos.slice(0, -1)"
-          :key="m"
-          class="inc-dia"
-          :class="{ 'inc-dia--on': momentoActivo === m }"
-          @click="momentoActivo = m"
+        <span
+          v-else
+          class="flex-shrink-0 flex items-center gap-1.5 h-9 px-4 rounded-[10px] bg-[#F4F6F4] text-[#8A948E] text-[13px] font-semibold cursor-not-allowed border border-[#E3E7E4]"
+          :title="motivoNoRegistrar || 'Día cerrado'"
         >
-          <span class="inc-dia__nombre">{{ labelDia(m) }}</span>
-          <span v-if="fechas[m] === hoy" class="inc-dia__hoy">HOY</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- ══════════ CARGANDO / ERROR ══════════ -->
-    <div v-if="cargando" class="inc-estado">
-      <div class="inc-estado__ring"><i class="pi pi-spin pi-spinner" /></div>
-      <span>Cargando incidencias...</span>
-    </div>
-    <div v-else-if="error" class="inc-estado inc-estado--error">
-      <i class="pi pi-exclamation-circle" style="font-size:1.4rem" />
-      <span>{{ error }}</span>
-    </div>
-
-    <template v-else>
-
-      <!-- ══════════ STATS ══════════ -->
-      <div class="inc-stats">
-        <div class="inc-stat inc-stat--bonus">
-          <div class="inc-stat__ic-wrap">
-            <i class="pi pi-star-fill" />
-          </div>
-          <div class="inc-stat__body">
-            <span class="inc-stat__num">{{ cntBonus }}</span>
-            <span class="inc-stat__lbl">Bonus hoy</span>
-          </div>
-          <span class="inc-stat__pts inc-stat__pts--bonus">+{{ bonusPts }} pts</span>
-        </div>
-
-        <div class="inc-stat inc-stat--deme">
-          <div class="inc-stat__ic-wrap">
-            <i class="pi pi-exclamation-triangle" />
-          </div>
-          <div class="inc-stat__body">
-            <span class="inc-stat__num">{{ cntDemerito }}</span>
-            <span class="inc-stat__lbl">Deméritos hoy</span>
-          </div>
-          <span class="inc-stat__pts inc-stat__pts--deme">−{{ demeritoPts }} pts</span>
-        </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Registrar incidencia
+        </span>
       </div>
 
-      <!-- ══════════ FILTROS ══════════ -->
-      <div class="inc-filtros">
-        <div class="inc-tabs-scroll">
-          <div class="inc-tabs">
+      <!-- ── MOBILE header ───────────────────────────── -->
+      <div class="md:hidden bg-white border-b border-[#E3E7E4] flex-shrink-0">
+        <div class="flex items-center justify-between px-4 py-3 h-[56px]">
+          <div class="flex flex-col">
+            <span class="text-[17px] font-bold text-[#16201B] leading-tight">Incidencias</span>
+            <span class="text-[12px] text-[#5B6660]">Evaluación</span>
+          </div>
+          <div class="flex items-center gap-2">
             <button
-              v-for="tab in [
-                { v: 'todas',     label: 'Todas',      cnt: listaDia.length },
-                { v: 'bonus',     label: 'Bonus',      cnt: cntBonus        },
-                { v: 'demerito',  label: 'Deméritos',  cnt: cntDemerito     },
-                { v: 'pendiente', label: 'Pendientes', cnt: cntPendiente    },
-              ]"
-              :key="tab.v"
-              :class="['inc-tab', filtTab === tab.v && 'inc-tab--on', filtTab === tab.v && `inc-tab--${tab.v}`]"
-              @click="filtTab = tab.v as any"
+              class="w-9 h-9 rounded-xl border border-[#DCE1DD] bg-white text-[#5B6660] flex items-center justify-center"
+              @click="modalOpen = true"
+              aria-label="¿Cómo funciona?"
             >
-              {{ tab.label }}
-              <span v-if="tab.cnt > 0" class="inc-tab__cnt">{{ tab.cnt }}</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             </button>
+            <router-link
+              v-if="puedeRegistrar"
+              :to="`/panel/incidencias/nueva${momentoActivo && fechas[momentoActivo] ? '?fecha=' + fechas[momentoActivo] : ''}`"
+              class="flex items-center gap-1.5 h-9 px-3.5 rounded-[10px] bg-[#0E7C59] text-white text-[13px] font-semibold font-[inherit]"
+              style="color: #fff"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              Registrar
+            </router-link>
           </div>
         </div>
-
-        <select v-if="equipos.length > 1" v-model="filtEquipo" class="inc-equipo-sel">
-          <option value="">Todos los equipos</option>
-          <option v-for="e in equipos" :key="e.id" :value="e.id">{{ e.nombre }}</option>
-        </select>
+        <div class="flex gap-1.5 overflow-x-auto px-4 pb-3">
+          <button
+            role="tab"
+            class="flex-shrink-0 h-[38px] px-3.5 rounded-[10px] text-[13px] font-semibold border transition-colors font-[inherit]"
+            :class="momentoActivo === '' ? 'bg-[#0E7C59] text-white border-[#0E7C59]' : 'bg-white text-[#16201B] border-[#DCE1DD]'"
+            @click="momentoActivo = ''"
+          >Todos</button>
+          <button
+            v-for="m in momentos"
+            :key="m"
+            role="tab"
+            :aria-selected="momentoActivo === m"
+            class="flex-shrink-0 h-[38px] px-3.5 rounded-[10px] text-[13px] font-semibold border transition-colors font-[inherit]"
+            :class="momentoActivo === m ? 'bg-[#0E7C59] text-white border-[#0E7C59]' : 'bg-white text-[#16201B] border-[#DCE1DD]'"
+            @click="momentoActivo = m"
+          >
+            {{ labelDiaCorto(m) }}<template v-if="fechas[m] === hoy"> · Hoy</template>
+          </button>
+        </div>
       </div>
 
-      <!-- ══════════ LISTA ══════════ -->
-      <div v-if="listaFiltrada.length" class="inc-lista">
-        <div
-          v-for="inc in listaFiltrada"
-          :key="inc.id"
-          :class="['inc-card', tipoDe(inc.codigo) === 'bonus' ? 'inc-card--bonus' : 'inc-card--deme']"
-          @click="router.push(`/panel/incidencias/${inc.id}`)"
-        >
-          <!-- Fila superior -->
-          <div class="inc-card__head">
-            <span :class="['inc-cod', tipoDe(inc.codigo) === 'bonus' ? 'inc-cod--b' : 'inc-cod--d']">
-              {{ inc.codigo }}
-            </span>
-            <div class="inc-card__equipo">
-              <span class="inc-card__dot" :style="{ background: colorEquipo(inc.equipo_id) }" />
-              <span class="inc-card__eq">{{ nombreEquipo(inc.equipo_id) }}</span>
+      <!-- ── Aviso bloqueo de registro ───────────────── -->
+      <div
+        v-if="!cargando && motivoNoRegistrar"
+        class="mx-4 mt-3 flex items-start gap-2.5 bg-[#FFF8EA] border border-l-4 border-[#F3DDAE] border-l-[#F59E0B] rounded-xl px-3.5 py-2.5 text-[13px] text-[#7A4F00] leading-relaxed flex-shrink-0"
+      >
+        <svg class="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <div class="flex flex-col gap-0.5">
+          <span>{{ motivoNoRegistrar }}</span>
+          <span v-if="fechaInicio && hoy < fechaInicio" class="text-[11px] text-[#92400E]">
+            Inicio: <strong>{{ labelFechaInicio }}</strong> ({{ fechaInicio }})
+          </span>
+        </div>
+      </div>
+
+      <!-- ── Main split layout ───────────────────────── -->
+      <div class="flex flex-1 overflow-hidden">
+
+        <!-- LIST COLUMN -->
+        <div class="flex flex-col flex-shrink-0 overflow-y-auto w-full md:w-[460px] xl:w-[480px]">
+
+          <!-- Summary cards -->
+          <section class="grid grid-cols-3 gap-2 px-4 pt-4 pb-2" aria-label="Resumen">
+            <div class="bg-white border border-[#E3E7E4] rounded-[14px] p-[10px]">
+              <span class="block text-[11px] text-[#5B6660] mb-0.5">Bonus validados</span>
+              <span class="text-[20px] font-bold text-[#0B6B4B] leading-none">+{{ bonusPts }}</span>
+              <span class="block text-[11px] text-[#5B6660] mt-0.5">{{ bonusValidados.length }} de {{ bonusTotal }}</span>
             </div>
-            <span :class="['inc-st', ESTADO_CFG[inc.estado]?.cls ?? 'st--amber']">
-              {{ ESTADO_CFG[inc.estado]?.label ?? inc.estado }}
-            </span>
+            <div class="bg-white border border-[#E3E7E4] rounded-[14px] p-[10px]">
+              <span class="block text-[11px] text-[#5B6660] mb-0.5">Deméritos validados</span>
+              <span class="text-[20px] font-bold text-[#A3261F] leading-none">−{{ demeritoPts }}</span>
+              <span class="block text-[11px] text-[#5B6660] mt-0.5">{{ demeritosValidados.length }} validados</span>
+            </div>
+            <div class="bg-[#FFF8EA] border border-[#F3DDAE] rounded-[14px] p-[10px]">
+              <span class="block text-[11px] text-[#7A4F00] mb-0.5">{{ session.esAdmin ? 'Mis pendientes' : 'Por validar' }}</span>
+              <span class="text-[20px] font-bold text-[#7A4F00] leading-none">{{ cntPendiente }}</span>
+            </div>
+          </section>
+
+          <!-- Filter chips + team selector -->
+          <div class="px-4 py-2 flex flex-col gap-2">
+            <div class="flex gap-1.5 overflow-x-auto">
+              <button
+                v-for="tab in [
+                  { v: 'todas',    label: 'Todas',     cnt: listaDia.length },
+                  { v: 'bonus',    label: 'Bonus',     cnt: cntBonus },
+                  { v: 'demerito', label: 'Deméritos', cnt: cntDemerito },
+                  { v: 'pendiente',label: 'Por validar',cnt: cntPendiente },
+                ]"
+                :key="tab.v"
+                class="flex-shrink-0 h-[34px] px-3 rounded-full text-[13px] border transition-colors font-[inherit]"
+                :class="filtTab === tab.v
+                  ? 'bg-[#16201B] text-white border-[#16201B] font-semibold'
+                  : 'bg-white text-[#16201B] border-[#DCE1DD] font-medium'"
+                @click="filtTab = tab.v as any"
+              >{{ tab.label }} · {{ tab.cnt }}</button>
+            </div>
+
+            <div v-if="equipos.length > 1" class="flex gap-1.5 overflow-x-auto">
+              <button
+                class="flex-shrink-0 h-[30px] px-3 rounded-full text-[12px] border transition-colors font-[inherit]"
+                :class="filtEquipo === '' ? 'bg-[#16201B] text-white border-[#16201B] font-semibold' : 'bg-white text-[#16201B] border-[#DCE1DD] font-medium'"
+                @click="filtEquipo = ''"
+              >Todos los equipos</button>
+              <button
+                v-for="eq in equipos"
+                :key="eq.id"
+                class="flex-shrink-0 h-[30px] px-3 rounded-full text-[12px] border transition-colors font-[inherit]"
+                :class="filtEquipo === eq.id ? 'bg-[#16201B] text-white border-[#16201B] font-semibold' : 'bg-white text-[#16201B] border-[#DCE1DD] font-medium'"
+                @click="filtEquipo = eq.id"
+              >{{ eq.nombre }}</button>
+            </div>
           </div>
 
-          <!-- Hecho -->
-          <p class="inc-card__hecho">{{ inc.hecho }}</p>
+          <!-- List -->
+          <div v-if="listaFiltrada.length" class="mx-4 mb-4 bg-white border border-[#E3E7E4] rounded-2xl overflow-hidden">
+            <ul class="list-none m-0 p-0">
+              <IncidentRow
+                v-for="inc in listaFiltrada"
+                :key="inc.id"
+                :inc="inc"
+                :tipo="tipoDe(inc.codigo)"
+                :equipoNombre="nombreEquipo(inc.equipo_id)"
+                :selected="incActiva?.id === inc.id"
+                @click="onRowClick(inc.id)"
+              />
+            </ul>
+          </div>
 
-          <!-- Pie -->
-          <div class="inc-card__foot">
-            <span class="inc-card__meta">
-              <i class="pi pi-calendar" />
-              {{ inc.fecha }} · {{ inc.hora.slice(0, 5) }}
-            </span>
-            <span :class="['inc-card__pts', tipoDe(inc.codigo) === 'bonus' ? 'pts--b' : 'pts--d']">
-              {{ tipoDe(inc.codigo) === 'bonus' ? '+' : '−' }}{{ inc.puntos }} pts
-            </span>
+          <!-- Empty state -->
+          <div v-else class="flex flex-col items-center gap-2 py-16 px-4 text-center">
+            <div class="w-14 h-14 rounded-full bg-white border border-[#E3E7E4] flex items-center justify-center mb-1">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8A948E" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M20 13V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7"/><path d="M2 17a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v2z"/></svg>
+            </div>
+            <p class="text-[15px] font-semibold text-[#5B6660] m-0">No hay incidencias</p>
+            <p class="text-[13px] text-[#8A948E] m-0 max-w-[220px] leading-relaxed">
+              {{
+                filtTab === 'pendiente' ? 'No hay incidencias pendientes de validación.' :
+                filtTab !== 'todas'    ? `No hay ${filtTab === 'bonus' ? 'bonus' : 'deméritos'} para este filtro.` :
+                'No hay incidencias registradas para este período.'
+              }}
+            </p>
           </div>
         </div>
-      </div>
 
-      <!-- Vacío -->
-      <div v-else class="inc-vacio">
-        <div class="inc-vacio__ic"><i class="pi pi-inbox" /></div>
-        <p class="inc-vacio__title">Sin incidencias</p>
-        <p class="inc-vacio__sub">
-          {{
-            filtTab === 'pendiente' ? 'No hay incidencias pendientes de validación.' :
-            filtTab !== 'todas'     ? `No hay incidencias de tipo "${filtTab}" para este día.` :
-            'Aún no hay incidencias registradas para este día.'
-          }}
-        </p>
+        <!-- DETAIL PANEL (tablet / desktop) -->
+        <div class="hidden md:flex flex-col flex-1 border-l border-[#E3E7E4] overflow-hidden">
+          <div v-if="cargandoDet" class="flex flex-col gap-3 p-5 animate-pulse">
+            <div class="h-12 bg-[#E3E7E4] rounded-xl" />
+            <div class="grid grid-cols-2 gap-2">
+              <div v-for="n in 4" :key="n" class="h-16 bg-[#E3E7E4] rounded-xl" />
+            </div>
+            <div class="h-24 bg-[#E3E7E4] rounded-xl" />
+          </div>
+          <div v-else-if="!incActiva" class="flex-1 flex flex-col items-center justify-center gap-3 text-center p-8">
+            <div class="w-16 h-16 rounded-full bg-[#F4F6F4] border border-[#E3E7E4] flex items-center justify-center">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8A948E" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+            </div>
+            <p class="text-[15px] font-semibold text-[#5B6660] m-0">Selecciona una incidencia</p>
+            <p class="text-[13px] text-[#8A948E] m-0 max-w-[200px] leading-relaxed">Haz clic en una fila de la lista para ver el detalle.</p>
+          </div>
+          <IncidentDetail
+            v-else
+            :inc="incActiva"
+            :equipoNombre="nombreEquipo(incActiva.equipo_id)"
+            :esAdmin="session.esAdmin"
+            :evidenciaUrls="evidenciaUrls"
+            :cargandoValidacion="cargandoValid"
+            @validar="onValidar"
+            @rechazar="onRechazar"
+            @close="incActiva = null"
+          />
+        </div>
       </div>
-
     </template>
   </div>
 
-  <!-- ═══════════════════════════════════════════════
-       MODAL ¿Cómo funciona?
-  ═══════════════════════════════════════════════ -->
+  <!-- ═══════════════════ MODAL ¿Cómo funciona? ═══════════════════ -->
   <Teleport to="body">
-    <Transition enter-active-class="m-in" leave-active-class="m-in" enter-from-class="m-from" leave-to-class="m-from">
-      <div v-if="modalOpen" class="m-overlay">
-        <div class="m-backdrop" @click="modalOpen = false" />
-        <div class="m-panel">
+    <Transition
+      enter-active-class="transition-opacity duration-200"
+      leave-active-class="transition-opacity duration-200"
+      enter-from-class="opacity-0"
+      leave-to-class="opacity-0"
+    >
+      <div v-if="modalOpen" class="fixed inset-0 z-[200] flex items-end justify-center sm:items-center sm:p-4">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-black/45 backdrop-blur-sm" @click="modalOpen = false" />
 
-          <div class="m-head">
-            <div class="m-head__left">
-              <div class="m-ic"><i class="pi pi-question-circle" /></div>
-              <h2 class="m-title">¿Cómo funciona?</h2>
+        <!-- Panel -->
+        <div class="relative w-full max-w-[440px] bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[90dvh]">
+
+          <!-- Header -->
+          <div class="flex items-center justify-between px-5 pt-4 pb-3.5 border-b border-[#F4F6F4] flex-shrink-0">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-[9px] bg-[#E1F3EA] text-[#0B6B4B] flex items-center justify-center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              </div>
+              <h2 class="text-[16px] font-bold text-[#16201B] m-0">¿Cómo funciona?</h2>
             </div>
-            <button class="m-close" @click="modalOpen = false"><i class="pi pi-times" /></button>
+            <button
+              class="w-8 h-8 rounded-lg bg-transparent hover:bg-[#F4F6F4] text-[#5B6660] flex items-center justify-center transition-colors"
+              @click="modalOpen = false"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
           </div>
 
-          <div class="m-body">
-            <p class="m-intro">
+          <!-- Body -->
+          <div class="overflow-y-auto px-5 py-4 flex-1 flex flex-col gap-4">
+            <p class="text-[14px] text-[#3A4540] leading-relaxed m-0">
               Las incidencias son eventos que <strong>suman</strong> (bonus) o
               <strong>restan</strong> (deméritos) puntos al equipo.
               Solo cuentan una vez que el admin las <strong>valida</strong>.
             </p>
 
-            <div class="m-regla">
-              <i class="pi pi-calendar-clock" />
+            <!-- Regla de registro -->
+            <div class="flex items-start gap-2 bg-[#E1F3EA] border border-[#0E7C59]/20 rounded-xl px-3.5 py-2.5 text-[13px] text-[#0B6B4B] leading-relaxed">
+              <svg class="flex-shrink-0 mt-0.5" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               <span>Se pueden registrar desde el <strong>primer día</strong> hasta el <strong>penúltimo día</strong> inclusive.</span>
             </div>
 
-            <div class="m-pasos">
-              <div class="m-paso">
-                <div class="m-paso__n">1</div>
+            <!-- Pasos -->
+            <div class="flex flex-col gap-3">
+              <div v-for="(p, i) in [
+                { t: 'Evaluador registra', d: 'Documenta el hecho, código, equipo y sube evidencia.' },
+                { t: 'Admin valida en bandeja', d: 'Aprueba o rechaza con un motivo. Solo las aprobadas aplican.' },
+                { t: 'Impacta el puntaje final', d: 'Solo incidencias validadas afectan el score del equipo.' },
+              ]" :key="i" class="flex gap-3 items-start">
+                <span
+                  class="w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold flex-shrink-0 mt-0.5"
+                  :class="i === 2 ? 'bg-[#0E7C59] text-white' : 'bg-[#E1F3EA] text-[#0B6B4B]'"
+                >{{ i + 1 }}</span>
                 <div>
-                  <p class="m-paso__t">Evaluador registra</p>
-                  <p class="m-paso__d">Documenta el hecho, código, equipo y sube evidencia.</p>
-                </div>
-              </div>
-              <div class="m-paso">
-                <div class="m-paso__n">2</div>
-                <div>
-                  <p class="m-paso__t">Admin valida en bandeja</p>
-                  <p class="m-paso__d">Aprueba o rechaza con un motivo. Solo las aprobadas aplican.</p>
-                </div>
-              </div>
-              <div class="m-paso">
-                <div class="m-paso__n m-paso__n--ok">3</div>
-                <div>
-                  <p class="m-paso__t">Impacta el puntaje final</p>
-                  <p class="m-paso__d">Solo incidencias <strong>validadas</strong> afectan el score del equipo.</p>
+                  <p class="text-[14px] font-semibold text-[#16201B] m-0 mb-0.5">{{ p.t }}</p>
+                  <p class="text-[12px] text-[#5B6660] m-0 leading-snug">{{ p.d }}</p>
                 </div>
               </div>
             </div>
 
-            <p class="m-sec m-sec--bonus"><i class="pi pi-star-fill" /> Bonus</p>
-            <div class="m-codigos">
-              <div v-for="c in bonusCodigos" :key="c.codigo" class="m-codigo">
-                <span class="m-cod m-cod--b">{{ c.codigo }}</span>
-                <div class="m-codigo__info">
-                  <strong>{{ c.nombre }}</strong>
-                  <span>{{ c.puntos }} pts{{ c.por_persona ? '/persona' : '' }}
-                    <template v-if="c.tope_equipo"> · tope {{ c.tope_equipo }} pts</template>
-                    <template v-if="c.max_acciones"> · máx. {{ c.max_acciones }} acciones</template>
-                  </span>
+            <!-- Bonus codes -->
+            <div>
+              <p class="text-[13px] font-bold text-[#0B6B4B] flex items-center gap-1.5 mb-2 mt-0">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                Bonus
+              </p>
+              <div class="flex flex-col gap-1.5">
+                <div v-for="c in bonusCodigos" :key="c.codigo" class="flex items-start gap-2.5 bg-[#F4F6F4] border border-[#E3E7E4] rounded-xl px-3 py-2">
+                  <span class="flex-shrink-0 px-2 py-0.5 rounded-[6px] text-[11px] font-bold bg-[#E1F3EA] text-[#0B6B4B]">{{ c.codigo }}</span>
+                  <div class="flex flex-col gap-0.5">
+                    <strong class="text-[13px] text-[#16201B]">{{ c.nombre }}</strong>
+                    <span class="text-[11px] text-[#5B6660]">
+                      {{ c.puntos }} pts{{ c.por_persona ? '/persona' : '' }}
+                      <template v-if="c.tope_equipo"> · tope {{ c.tope_equipo }} pts</template>
+                      <template v-if="c.max_acciones"> · máx. {{ c.max_acciones }} acciones</template>
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <p class="m-sec m-sec--deme"><i class="pi pi-exclamation-triangle" /> Deméritos</p>
-            <div class="m-codigos">
-              <div v-for="c in demeritoCodigos" :key="c.codigo" class="m-codigo">
-                <span class="m-cod m-cod--d">{{ c.codigo }}</span>
-                <div class="m-codigo__info">
-                  <strong>{{ c.nombre }}</strong>
-                  <span>{{ c.puntos }} pts{{ c.por_persona ? '/persona' : '' }}
-                    <template v-if="c.requiere_advertencia"> · requiere advertencia previa</template>
-                  </span>
+            <!-- Demerito codes -->
+            <div>
+              <p class="text-[13px] font-bold text-[#A3261F] flex items-center gap-1.5 mb-2 mt-0">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+                Deméritos
+              </p>
+              <div class="flex flex-col gap-1.5">
+                <div v-for="c in demeritoCodigos" :key="c.codigo" class="flex items-start gap-2.5 bg-[#F4F6F4] border border-[#E3E7E4] rounded-xl px-3 py-2">
+                  <span class="flex-shrink-0 px-2 py-0.5 rounded-[6px] text-[11px] font-bold bg-[#FDECEC] text-[#A3261F]">{{ c.codigo }}</span>
+                  <div class="flex flex-col gap-0.5">
+                    <strong class="text-[13px] text-[#16201B]">{{ c.nombre }}</strong>
+                    <span class="text-[11px] text-[#5B6660]">
+                      {{ c.puntos }} pts{{ c.por_persona ? '/persona' : '' }}
+                      <template v-if="c.requiere_advertencia"> · requiere advertencia previa</template>
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div class="m-estados">
-              <p class="m-estados__tit">Estados</p>
-              <div class="m-est-row"><span class="inc-st st--amber">Pendiente</span><span>Esperando revisión del admin</span></div>
-              <div class="m-est-row"><span class="inc-st st--green">Validado</span><span>Confirmado — aplica al puntaje</span></div>
-              <div class="m-est-row"><span class="inc-st st--red">Rechazado</span><span>No procede — no afecta el puntaje</span></div>
+            <!-- Estados -->
+            <div class="bg-[#F4F6F4] border border-[#E3E7E4] rounded-xl p-3.5">
+              <p class="text-[11px] font-bold text-[#8A948E] uppercase tracking-wide m-0 mb-3">Estados</p>
+              <div v-for="(est, idx) in [
+                { chip: 'Registrada',  cls: 'bg-[#EEF0EE] text-[#4A544F]', desc: 'Esperando revisión del admin' },
+                { chip: 'Validada',    cls: 'bg-[#E1F3EA] text-[#0B6B4B]', desc: 'Confirmada — aplica al puntaje' },
+                { chip: 'Rechazada',   cls: 'bg-[#FDECEC] text-[#A3261F]', desc: 'No procede — no afecta el puntaje' },
+              ]" :key="idx"
+              class="flex items-center gap-2.5 py-2 text-[13px] text-[#5B6660]"
+              :class="idx > 0 ? 'border-t border-[#EEF1EF]' : ''"
+              >
+                <span class="text-[11px] font-semibold px-2 py-0.5 rounded-[6px] flex-shrink-0" :class="est.cls">{{ est.chip }}</span>
+                <span>{{ est.desc }}</span>
+              </div>
             </div>
 
-            <div class="m-nota">
-              <i class="pi pi-info-circle" />
+            <!-- Nota -->
+            <div class="flex items-start gap-2 bg-[#FFF8EA] border border-[#F3DDAE] rounded-xl px-3.5 py-2.5 text-[12px] text-[#7A4F00] leading-relaxed">
+              <svg class="flex-shrink-0 mt-0.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               <span>Un solo demérito por episodio. El puntaje mínimo del equipo es 0.</span>
             </div>
           </div>
 
-          <div class="m-foot">
-            <button class="inc-btn-new" style="width:100%;justify-content:center" @click="modalOpen = false">
-              Entendido
-            </button>
+          <!-- Footer -->
+          <div class="px-5 py-4 border-t border-[#F4F6F4] flex-shrink-0">
+            <button
+              class="w-full h-11 rounded-xl bg-[#0E7C59] text-white text-[14px] font-semibold font-[inherit] hover:bg-[#0B6B4B] transition-colors"
+              @click="modalOpen = false"
+            >Entendido</button>
           </div>
         </div>
       </div>
     </Transition>
   </Teleport>
 </template>
-
-<style scoped>
-/* ════════════════════════════════════════════
-   PAGE
-════════════════════════════════════════════ */
-.inc-page {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 0 1rem 4rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-/* ════════════════════════════════════════════
-   TOPBAR
-════════════════════════════════════════════ */
-.inc-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding-top: 0.5rem;
-}
-.inc-topbar__left {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-.inc-topbar__right {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-shrink: 0;
-}
-
-.inc-btn-help {
-  width: 36px; height: 36px;
-  border-radius: 10px;
-  border: 1.5px solid #e2e8f0;
-  background: white;
-  color: #94a3b8;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; font-size: 0.95rem;
-  transition: color .15s, border-color .15s, background .15s;
-  flex-shrink: 0;
-}
-.inc-btn-help:hover { color: #059669; border-color: #a7f3d0; background: #ecfdf5; }
-
-.inc-btn-new {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  min-height: 36px;
-  padding: 0 0.9rem;
-  border-radius: 10px;
-  border: none;
-  font-size: 0.84rem;
-  font-weight: 700;
-  cursor: pointer;
-  text-decoration: none;
-  white-space: nowrap;
-  background: linear-gradient(135deg, #059669, #047857);
-  color: white;
-  box-shadow: 0 2px 8px rgba(5,150,105,0.3);
-  transition: box-shadow .15s, background .15s;
-}
-.inc-btn-new:hover { box-shadow: 0 4px 14px rgba(5,150,105,0.4); }
-.inc-btn-new--off {
-  background: #f1f5f9;
-  color: #94a3b8;
-  box-shadow: none;
-  border: 1.5px solid #e2e8f0;
-  cursor: not-allowed;
-}
-
-/* ════════════════════════════════════════════
-   AVISO BLOQUEO
-════════════════════════════════════════════ */
-.inc-aviso {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  background: #fffbeb;
-  border: 1.5px solid #fde68a;
-  border-left: 4px solid #f59e0b;
-  border-radius: 12px;
-  padding: 0.7rem 0.9rem;
-  font-size: 0.82rem;
-  color: #92400e;
-  line-height: 1.45;
-}
-.inc-aviso > .pi { color: #d97706; font-size: 1rem; flex-shrink: 0; margin-top: 0.05rem; }
-.inc-aviso > div { display: flex; flex-direction: column; gap: 0.15rem; }
-.inc-aviso__fecha { font-size: 0.76rem; color: #b45309; }
-
-/* ════════════════════════════════════════════
-   SELECTOR DE DÍAS
-════════════════════════════════════════════ */
-.inc-dias-wrap {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  margin: 0 -1rem;
-  padding: 0 1rem;
-}
-.inc-dias-wrap::-webkit-scrollbar { display: none; }
-.inc-dias {
-  display: flex;
-  gap: 0.5rem;
-  padding-bottom: 2px;
-}
-.inc-dia {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.15rem;
-  flex-shrink: 0;
-  min-width: 72px;
-  padding: 0.6rem 0.75rem;
-  border-radius: 14px;
-  border: 1.5px solid #e2e8f0;
-  background: white;
-  cursor: pointer;
-  transition: all .15s;
-  box-shadow: 0 1px 3px rgba(0,0,0,.05);
-}
-.inc-dia:hover { border-color: #6ee7b7; background: #ecfdf5; }
-.inc-dia__nombre {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #64748b;
-  line-height: 1;
-}
-.inc-dia__hoy {
-  font-size: 0.55rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  background: #d1fae5;
-  color: #059669;
-  border-radius: 4px;
-  padding: 0.1rem 0.3rem;
-  line-height: 1.6;
-}
-.inc-dia--on {
-  background: linear-gradient(135deg, #059669, #047857);
-  border-color: #059669;
-  box-shadow: 0 4px 12px rgba(5,150,105,0.3);
-}
-.inc-dia--on .inc-dia__nombre { color: white; font-weight: 700; }
-.inc-dia--on .inc-dia__hoy {
-  background: rgba(255,255,255,0.25);
-  color: white;
-}
-
-/* ════════════════════════════════════════════
-   CARGANDO / ERROR
-════════════════════════════════════════════ */
-.inc-estado {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 3rem 1rem;
-  color: #94a3b8;
-  font-size: 0.88rem;
-  text-align: center;
-}
-.inc-estado--error { color: #dc2626; }
-.inc-estado__ring {
-  width: 48px; height: 48px; border-radius: 50%;
-  background: #ecfdf5; display: flex; align-items: center; justify-content: center;
-  color: #059669; font-size: 1.3rem;
-}
-
-/* ════════════════════════════════════════════
-   STATS
-════════════════════════════════════════════ */
-.inc-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
-}
-.inc-stat {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  background: white;
-  border: 1.5px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 0.8rem 0.85rem;
-  box-shadow: 0 1px 4px rgba(0,0,0,.04);
-}
-.inc-stat__ic-wrap {
-  width: 36px; height: 36px;
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; font-size: 0.95rem;
-}
-.inc-stat--bonus .inc-stat__ic-wrap  { background: #d1fae5; color: #059669; border: 1.5px solid #a7f3d0; }
-.inc-stat--deme  .inc-stat__ic-wrap  { background: #fee2e2; color: #dc2626; border: 1.5px solid #fecaca; }
-
-.inc-stat__body { flex: 1; min-width: 0; }
-.inc-stat__num {
-  display: block;
-  font-size: 1.3rem; font-weight: 800; line-height: 1;
-}
-.inc-stat--bonus .inc-stat__num { color: #059669; }
-.inc-stat--deme  .inc-stat__num { color: #dc2626; }
-.inc-stat__lbl { font-size: 0.65rem; color: #94a3b8; display: block; margin-top: 0.1rem; }
-
-.inc-stat__pts {
-  font-size: 0.72rem; font-weight: 700;
-  border-radius: 999px; padding: 0.15rem 0.5rem;
-  flex-shrink: 0; align-self: flex-start; white-space: nowrap;
-}
-.inc-stat__pts--bonus { background: #d1fae5; color: #047857; }
-.inc-stat__pts--deme  { background: #fee2e2; color: #dc2626; }
-
-/* ════════════════════════════════════════════
-   FILTROS
-════════════════════════════════════════════ */
-.inc-filtros {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.inc-tabs-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  margin: 0 -1rem;
-  padding: 0 1rem;
-}
-.inc-tabs-scroll::-webkit-scrollbar { display: none; }
-.inc-tabs {
-  display: flex;
-  background: #f1f5f9;
-  border-radius: 12px;
-  padding: 3px;
-  gap: 2px;
-  width: max-content;
-  min-width: 100%;
-}
-.inc-tab {
-  flex: 1;
-  display: flex; align-items: center; justify-content: center;
-  gap: 0.25rem;
-  min-height: 38px;
-  padding: 0 0.65rem;
-  border: none; border-radius: 10px;
-  background: transparent;
-  font-size: 0.8rem; font-weight: 600;
-  color: #64748b;
-  cursor: pointer; white-space: nowrap;
-  transition: all .15s;
-}
-.inc-tab:hover { color: #374151; }
-.inc-tab--on { background: white; color: #111827; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
-.inc-tab--bonus.inc-tab--on    { color: #047857; }
-.inc-tab--demerito.inc-tab--on { color: #b91c1c; }
-.inc-tab--pendiente.inc-tab--on { color: #92400e; }
-.inc-tab__cnt {
-  font-size: 0.62rem; font-weight: 700;
-  background: #e2e8f0; color: #374151;
-  border-radius: 999px; padding: 0 0.35rem;
-  min-width: 16px; text-align: center; line-height: 1.6;
-}
-.inc-tab--on .inc-tab__cnt { background: #f1f5f9; }
-
-.inc-equipo-sel {
-  width: 100%;
-  min-height: 42px;
-  padding: 0.4rem 0.75rem;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 10px;
-  font-size: 0.84rem;
-  background: white;
-  color: #374151;
-  cursor: pointer;
-}
-.inc-equipo-sel:focus { outline: none; border-color: #059669; box-shadow: 0 0 0 3px rgba(5,150,105,.12); }
-
-/* ════════════════════════════════════════════
-   CARDS
-════════════════════════════════════════════ */
-.inc-lista { display: flex; flex-direction: column; gap: 0.55rem; }
-
-.inc-card {
-  background: white;
-  border: 1.5px solid #e5e7eb;
-  border-left-width: 4px;
-  border-radius: 14px;
-  padding: 0.85rem 0.95rem;
-  cursor: pointer;
-  transition: box-shadow .15s, transform .1s;
-  box-shadow: 0 1px 4px rgba(0,0,0,.04);
-}
-.inc-card:active { transform: scale(0.99); }
-.inc-card:hover  { box-shadow: 0 4px 16px rgba(0,0,0,.09); }
-.inc-card--bonus { border-left-color: #059669; }
-.inc-card--deme  { border-left-color: #ef4444; }
-
-.inc-card__head {
-  display: flex; align-items: center; gap: 0.45rem;
-  margin-bottom: 0.45rem; flex-wrap: wrap;
-}
-.inc-cod {
-  font-size: 0.7rem; font-weight: 800;
-  letter-spacing: 0.04em; border-radius: 6px;
-  padding: 0.18rem 0.45rem; flex-shrink: 0;
-}
-.inc-cod--b { background: #d1fae5; color: #047857; }
-.inc-cod--d { background: #fee2e2; color: #b91c1c; }
-
-.inc-card__equipo {
-  display: flex; align-items: center; gap: 0.35rem;
-  flex: 1; min-width: 0;
-}
-.inc-card__dot {
-  width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
-  border: 1px solid rgba(0,0,0,.1);
-}
-.inc-card__eq {
-  font-weight: 700; font-size: 0.84rem; color: #1e293b;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-
-/* Estado badge inline */
-.inc-st {
-  font-size: 0.65rem; font-weight: 700;
-  border-radius: 6px; padding: 0.18rem 0.45rem;
-  white-space: nowrap; flex-shrink: 0;
-  text-transform: uppercase; letter-spacing: 0.04em;
-}
-.st--amber { background: #fef3c7; color: #92400e; }
-.st--green { background: #d1fae5; color: #065f46; }
-.st--red   { background: #fee2e2; color: #991b1b; }
-
-.inc-card__hecho {
-  font-size: 0.83rem; color: #475569;
-  margin: 0 0 0.45rem; line-height: 1.45;
-  display: -webkit-box; -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical; overflow: hidden;
-}
-.inc-card__foot {
-  display: flex; align-items: center; justify-content: space-between;
-}
-.inc-card__meta {
-  display: flex; align-items: center; gap: 0.3rem;
-  font-size: 0.72rem; color: #94a3b8;
-}
-.inc-card__meta .pi { font-size: 0.6rem; }
-.inc-card__pts { font-weight: 800; font-size: 0.88rem; }
-.pts--b { color: #059669; }
-.pts--d { color: #ef4444; }
-
-/* ════════════════════════════════════════════
-   VACÍO
-════════════════════════════════════════════ */
-.inc-vacio {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 0.4rem; padding: 3rem 1rem; text-align: center;
-}
-.inc-vacio__ic {
-  width: 54px; height: 54px; border-radius: 50%;
-  background: #f8fafc; border: 1.5px solid #e2e8f0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.4rem; color: #cbd5e1; margin-bottom: 0.2rem;
-}
-.inc-vacio__title { font-size: 0.95rem; font-weight: 700; color: #64748b; margin: 0; }
-.inc-vacio__sub   { font-size: 0.8rem; color: #94a3b8; margin: 0; line-height: 1.5; max-width: 260px; }
-
-/* ════════════════════════════════════════════
-   MODAL
-════════════════════════════════════════════ */
-.m-in   { transition: opacity .2s ease; }
-.m-from { opacity: 0; }
-
-.m-overlay {
-  position: fixed; inset: 0; z-index: 200;
-  display: flex; align-items: flex-end; justify-content: center;
-}
-@media (min-width: 640px) { .m-overlay { align-items: center; padding: 1rem; } }
-
-.m-backdrop {
-  position: absolute; inset: 0;
-  background: rgba(0,0,0,.45); backdrop-filter: blur(4px);
-}
-.m-panel {
-  position: relative; width: 100%; max-width: 440px;
-  background: white; border-radius: 24px 24px 0 0;
-  box-shadow: 0 20px 60px rgba(0,0,0,.25);
-  display: flex; flex-direction: column;
-  overflow: hidden; max-height: 90dvh;
-}
-@media (min-width: 640px) { .m-panel { border-radius: 20px; } }
-
-.m-head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 1rem 1.15rem 0.85rem;
-  border-bottom: 1px solid #f1f5f9; flex-shrink: 0;
-}
-.m-head__left { display: flex; align-items: center; gap: 0.6rem; }
-.m-ic {
-  width: 32px; height: 32px; border-radius: 9px;
-  background: #d1fae5; color: #059669;
-  display: flex; align-items: center; justify-content: center; font-size: 0.88rem;
-}
-.m-title { font-size: 0.98rem; font-weight: 800; margin: 0; color: #0f172a; }
-.m-close {
-  width: 30px; height: 30px; border-radius: 8px;
-  border: none; background: transparent; color: #94a3b8;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; font-size: 0.8rem; transition: background .15s;
-}
-.m-close:hover { background: #f1f5f9; color: #374151; }
-
-.m-body {
-  overflow-y: auto; padding: 1rem 1.15rem;
-  flex: 1; display: flex; flex-direction: column; gap: 0.9rem;
-}
-.m-intro { font-size: 0.86rem; color: #475569; margin: 0; line-height: 1.6; }
-
-.m-regla {
-  display: flex; align-items: flex-start; gap: 0.5rem;
-  background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 10px;
-  padding: 0.65rem 0.8rem; font-size: 0.81rem; color: #166534; line-height: 1.5;
-}
-.m-regla .pi { flex-shrink: 0; margin-top: 0.1rem; color: #059669; }
-
-.m-pasos { display: flex; flex-direction: column; gap: 0.65rem; }
-.m-paso  { display: flex; gap: 0.7rem; align-items: flex-start; }
-.m-paso__n {
-  width: 26px; height: 26px; border-radius: 50%;
-  background: #d1fae5; color: #047857;
-  font-weight: 800; font-size: 0.76rem;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; margin-top: 0.1rem;
-}
-.m-paso__n--ok { background: #059669; color: white; }
-.m-paso__t { font-size: 0.86rem; font-weight: 700; color: #1e293b; margin: 0 0 0.08rem; }
-.m-paso__d { font-size: 0.78rem; color: #64748b; margin: 0; line-height: 1.4; }
-
-.m-sec {
-  font-size: 0.8rem; font-weight: 700; margin: 0;
-  display: flex; align-items: center; gap: 0.35rem;
-}
-.m-sec--bonus { color: #047857; }
-.m-sec--deme  { color: #b91c1c; }
-
-.m-codigos { display: flex; flex-direction: column; gap: 0.35rem; margin-top: -0.4rem; }
-.m-codigo {
-  display: flex; align-items: flex-start; gap: 0.5rem;
-  padding: 0.5rem 0.7rem;
-  background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 10px;
-}
-.m-cod {
-  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em;
-  border-radius: 6px; padding: 0.18rem 0.45rem; flex-shrink: 0;
-}
-.m-cod--b { background: #d1fae5; color: #047857; }
-.m-cod--d { background: #fee2e2; color: #b91c1c; }
-.m-codigo__info { display: flex; flex-direction: column; gap: 0.05rem; font-size: 0.8rem; }
-.m-codigo__info strong { color: #1e293b; }
-.m-codigo__info span   { font-size: 0.74rem; color: #64748b; }
-
-.m-estados {
-  background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 12px; padding: 0.85rem;
-}
-.m-estados__tit {
-  font-size: 0.68rem; font-weight: 700; color: #94a3b8;
-  text-transform: uppercase; letter-spacing: .06em; margin: 0 0 0.55rem;
-}
-.m-est-row {
-  display: flex; align-items: center; gap: 0.6rem;
-  padding: 0.28rem 0; font-size: 0.78rem; color: #64748b;
-}
-.m-est-row + .m-est-row { border-top: 1px solid #f1f5f9; }
-
-.m-nota {
-  display: flex; align-items: flex-start; gap: 0.5rem;
-  padding: 0.7rem 0.85rem;
-  background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 10px;
-  font-size: 0.77rem; color: #78350f; line-height: 1.5;
-}
-.m-nota .pi { flex-shrink: 0; margin-top: 0.1rem; color: #d97706; }
-
-.m-foot {
-  padding: 0.85rem 1.15rem;
-  border-top: 1px solid #f1f5f9; flex-shrink: 0;
-}
-
-/* ════════════════════════════════════════════
-   RESPONSIVE TABLET / DESKTOP
-════════════════════════════════════════════ */
-@media (min-width: 480px) {
-  .inc-filtros { flex-direction: row; align-items: center; }
-  .inc-tabs { width: auto; }
-  .inc-tabs-scroll { margin: 0; padding: 0; overflow: visible; }
-  .inc-equipo-sel { width: auto; flex-shrink: 0; }
-}
-
-@media (min-width: 640px) {
-  .inc-page { padding: 0 1.5rem 4rem; }
-  .inc-dias-wrap { margin: 0; padding: 0; overflow: visible; }
-  .inc-dias { flex-wrap: wrap; }
-  .inc-dia { min-width: 80px; }
-  .inc-stat__num { font-size: 1.5rem; }
-}
-</style>

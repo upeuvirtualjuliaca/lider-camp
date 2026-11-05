@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Evaluar por criterio – web</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #F4F6F4; font-family: Inter, system-ui, sans-serif; color: #16201B; display: flex; flex-wrap: wrap">
+
+  <aside aria-label="Menú principal" style="flex: 1 1 264px; max-width: 264px; background: #FFFFFF; border-right: 1px solid #E3E7E4; display: flex; flex-direction: column; padding: 20px 14px; box-sizing: border-box; gap: 18px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 6px">
+      <span aria-hidden="true" style="width: 36px; height: 36px; border-radius: 10px; background: #0E7C59; display: flex; align-items: center; justify-content: center">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18L12 4 3 20z"></path><path d="M10 20l2-4 2 4"></path></svg>
+      </span>
+      <div style="display: flex; flex-direction: column"><span style="font-size: 16px; font-weight: 700">LiderCamp</span><span style="font-size: 12px; color: #5B6660">2026-II</span></div>
+    </div>
+    <nav style="display: flex; flex-direction: column; gap: 2px">
+      <a href="InicioWeb.dc.html" style="display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 12px; border-radius: 10px; font-size: 14px; font-weight: 500">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5B6660" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>Inicio</a>
+      <span style="margin: 14px 12px 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #5B6660">Evaluación</span>
+      <a href="#" aria-current="page" style="display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 12px; border-radius: 10px; background: #E1F3EA; color: #0B6B4B; font-size: 14px; font-weight: 600">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 8-8"></path><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"></path></svg>Evaluar</a>
+      <a href="#" style="display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 12px; border-radius: 10px; font-size: 14px; font-weight: 500">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5B6660" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.9"></path></svg>Actividades</a>
+      <a href="#" style="display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 12px; border-radius: 10px; font-size: 14px; font-weight: 500">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5B6660" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>Incidencias</a>
+      <span style="margin: 14px 12px 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #5B6660">Seguimiento</span>
+      <a href="#" style="display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 12px; border-radius: 10px; font-size: 14px; font-weight: 500">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5B6660" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg>Resultados</a>
+    </nav>
+    <div style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid #E3E7E4; border-radius: 14px">
+      <span aria-hidden="true" style="width: 38px; height: 38px; border-radius: 50%; background: #0E7C59; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700">JH</span>
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span style="font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Janeth Huanca Cutipa</span><span style="font-size: 12px; color: #5B6660">Evaluadora</span></div>
+    </div>
+  </aside>
+
+  <div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+    <header style="min-height: 64px; padding: 10px 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px; border-bottom: 1px solid #E3E7E4; background: #FFFFFF; box-sizing: border-box">
+      <div style="display: flex; flex-direction: column; margin-right: auto">
+        <span style="font-size: 12px; color: #5B6660">Evaluación</span>
+        <span style="font-size: 18px; font-weight: 700">Evaluar</span>
+      </div>
+      <div role="tablist" aria-label="Día a evaluar" style="display: flex; gap: 6px; flex-wrap: wrap">
+        <button role="tab" aria-selected="true" style="height: 40px; padding: 0 14px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; background: #0E7C59; color: #FFFFFF; border: 1px solid #0E7C59">Jue 5 · Hoy · 47%</button>
+        <button role="tab" style="height: 40px; padding: 0 14px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; background: #FFFFFF; color: #16201B; border: 1px solid #DCE1DD">Vie 6</button>
+        <button role="tab" style="height: 40px; padding: 0 14px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; background: #FFFFFF; color: #16201B; border: 1px solid #DCE1DD">Sáb 7</button>
+        <button role="tab" style="height: 40px; padding: 0 14px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; background: #FFFFFF; color: #16201B; border: 1px solid #DCE1DD">Dom 8</button>
+      </div>
+      <div role="tablist" aria-label="Modo de evaluación" style="display: flex; padding: 4px; background: #EEF1EF; border-radius: 12px">
+        <a href="EvaluarWebEquipo.dc.html" role="tab" style="height: 34px; padding: 0 16px; border-radius: 9px; display: flex; align-items: center; font-size: 14px; font-weight: 500; color: #5B6660">Por equipo</a>
+        <span role="tab" aria-selected="true" style="height: 34px; padding: 0 16px; border-radius: 9px; display: flex; align-items: center; font-size: 14px; font-weight: 600; color: #0E7C59; background: #FFFFFF; box-shadow: 0 1px 2px rgba(22,32,27,0.12)">Por criterio</span>
+      </div>
+    </header>
+
+    <div style="flex: 1; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; padding: 20px 28px; box-sizing: border-box">
+      <section aria-label="Criterios del día" style="flex: 1 1 320px; max-width: 360px; background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; padding: 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+        <label style="display: flex; align-items: center; gap: 10px; background: #F4F6F4; border: 1px solid #DCE1DD; border-radius: 12px; padding: 0 12px; height: 42px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5B6660" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+          <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Buscar criterio</span>
+          <input type="search" placeholder="Buscar criterio" style="border: 0; outline: none; flex: 1; font: inherit; font-size: 14px; background: transparent; color: #16201B">
+        </label>
+        <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <div style="display: flex; justify-content: space-between; margin: 0 4px 4px">
+              <h2 style="margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #5B6660">{{g.name}}</h2>
+              <span style="font-size: 11px; color: #5B6660">{{g.summary}}</span>
+            </div>
+            <sc-for list="{{g.items}}" as="c" hint-placeholder-count="3">
+              <button onClick="{{c.pick}}" style="{{c.style}}">
+                <span style="flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 2px">
+                  <span style="font-size: 14px; font-weight: 600">{{c.name}}</span>
+                  <span style="font-size: 12px; color: #5B6660">{{c.done}}/12 · máx. {{c.max}}</span>
+                </span>
+                <span style="{{c.chip}}">{{c.status}}</span>
+              </button>
+            </sc-for>
+          </div>
+        </sc-for>
+        <details style="border-top: 1px solid #EEF1EF; padding-top: 4px">
+          <summary style="min-height: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 4px; font-size: 12px; font-weight: 600; color: #5B6660; cursor: pointer">No se evalúan hoy · 3<span style="font-weight: 500">Ver</span></summary>
+          <p style="margin: 0 4px 8px; font-size: 12px; color: #5B6660; line-height: 1.5">Portada · Izamiento · Cocina y uniforme</p>
+        </details>
+      </section>
+
+      <main style="flex: 999 1 480px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+        <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px">
+            <div style="flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 2px">
+              <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #5B6660">Armado del campamento · Jue 5 nov</span>
+              <span style="font-size: 24px; font-weight: 700; letter-spacing: -0.3px">{{current}}</span>
+            </div>
+            <span style="font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 8px; background: #F4F6F4; border: 1px solid #DCE1DD">Máx. 50</span>
+            <a href="#" style="height: 42px; padding: 0 16px; border-radius: 12px; background: #0E7C59; color: #FFFFFF; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600">Siguiente criterio: Cerco
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px">
+            <div style="flex: 1; height: 6px; background: #E3E7E4; border-radius: 3px; overflow: hidden"><div style="height: 6px; background: #0E7C59; border-radius: 3px; width: {{pct}}%"></div></div>
+            <span style="font-size: 13px; color: #5B6660">{{done}} de 12 equipos</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding-top: 12px; border-top: 1px solid #EEF1EF; font-size: 13px; line-height: 1.45">
+            <p style="margin: 0"><strong style="color: #0B6B4B">Abarca:</strong> ubicación autorizada, montaje estable, accesos libres, capacidad adecuada y pertenencias organizadas.</p>
+            <p style="margin: 0"><strong style="color: #7A4F00">No abarca:</strong> marca, precio, tamaño ostentoso o acabados decorativos.</p>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 6px">
+          <button style="height: 32px; padding: 0 12px; border-radius: 16px; border: 0; background: #16201B; color: #FFFFFF; font: inherit; font-size: 12px; font-weight: 600">Todos · 12</button>
+          <button style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid #DCE1DD; background: #FFFFFF; color: #16201B; font: inherit; font-size: 12px; font-weight: 500">Pendientes · {{left}}</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px">
+          <sc-for list="{{teams}}" as="t" hint-placeholder-count="6">
+            <article style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 12px">
+              <div style="display: flex; align-items: center; gap: 10px">
+                <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: #FFFFFF; background: {{t.color}}">{{t.initials}}</span>
+                <span style="flex: 1; font-size: 15px; font-weight: 600">{{t.name}}</span>
+                <span style="{{t.chip}}">{{t.status}}</span>
+              </div>
+              <div role="radiogroup" aria-label="Nota de {{t.name}}" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px">
+                <sc-for list="{{t.opts}}" as="o" hint-placeholder-count="5">
+                  <button role="radio" onClick="{{o.pick}}" style="{{o.style}}">{{o.label}}</button>
+                </sc-for>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+                <span style="font-size: 12px; color: {{t.descColor}}; line-height: 1.4">{{t.desc}}</span>
+                <button aria-label="Comentario para {{t.name}}" style="flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px; border: 1px solid #DCE1DD; background: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5B6660" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path></svg>
+                </button>
+              </div>
+            </article>
+          </sc-for>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { sel: 'Carpas', notas: { ad: 4, ar: 3, co: null, de: null, en: 2, is: null } }; }
+  renderVals() {
+    const self = this;
+    const mk = function (name, done, max) {
+      let status = 'Sin empezar', chip = 'background: #EEF0EE; color: #4A544F;';
+      if (done === 12) { status = 'Completo'; chip = 'background: #E1F3EA; color: #0B6B4B;'; }
+      else if (done > 0) { status = 'En curso'; chip = 'background: #FFF1D6; color: #7A4F00;'; }
+      const on = self.state.sel === name;
+      return { name: name, done: done, max: max, status: status,
+        chip: 'font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; ' + chip,
+        pick: function () { self.setState({ sel: name }); },
+        style: 'display: flex; align-items: center; gap: 10px; width: 100%; min-height: 54px; padding: 8px 12px; border-radius: 12px; font: inherit; color: #16201B; text-align: left; cursor: pointer; ' +
+          (on ? 'background: #E1F3EA; border: 1px solid #0E7C59;' : 'background: #FFFFFF; border: 1px solid transparent;') };
+    };
+    const raw = [
+      { name: 'Armado del campamento', items: [mk('Carpas', 5, 50), mk('Cerco', 12, 50), mk('Basurero', 0, 50), mk('Tendedero', 0, 50)] },
+      { name: 'Orden y cocina', items: [mk('Orden y limpieza interior', 12, 100), mk('Orden y limpieza exterior', 8, 100), mk('Cocina y orden', 0, 100)] },
+      { name: 'Ceremonias', items: [mk('Barras de la mañana', 2, 100), mk('Barras de la noche', 0, 100)] }
+    ];
+    const groups = raw.map(function (g) {
+      let d = 0; g.items.forEach(function (c) { d += c.done; });
+      return { name: g.name, items: g.items, summary: d + '/' + (g.items.length * 12) };
+    });
+    const desc = ['No realiza la acción pese a contar con oportunidad y apoyos.', 'Avance mínimo o depende de ayuda constante.', 'Cumple parcialmente y requiere acompañamiento frecuente.', 'Cumple lo esencial; omisión menor o requiere un recordatorio.', 'Cumple todos los aspectos, con autonomía y dentro del plazo.'];
+    const defs = [
+      { id: 'ad', name: 'Administración', initials: 'AD', color: '#1F6FB2' },
+      { id: 'ar', name: 'Arquitectura', initials: 'AR', color: '#B4532A' },
+      { id: 'co', name: 'Contabilidad', initials: 'CO', color: '#6B4FA8' },
+      { id: 'de', name: 'Derecho', initials: 'DE', color: '#2E5E8C' },
+      { id: 'en', name: 'Enfermería', initials: 'EN', color: '#B23A6B' },
+      { id: 'is', name: 'Ingeniería de Sistemas', initials: 'IS', color: '#0E7C59' }
+    ];
+    const max = 50;
+    const notas = this.state.notas;
+    let n = 0;
+    const teams = defs.map(function (d) {
+      const s = notas[d.id];
+      const has = s !== null && s !== undefined;
+      if (has) n++;
+      return Object.assign({}, d, {
+        opts: [0, 1, 2, 3, 4].map(function (lv) {
+          const on = s === lv;
+          return {
+            label: String(max * lv / 4).replace('.', ','),
+            pick: function () { const x = Object.assign({}, self.state.notas); x[d.id] = lv; self.setState({ notas: x }); },
+            style: 'height: 46px; border-radius: 12px; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; ' +
+              (on ? 'background: #0E7C59; color: #FFFFFF; border: 1px solid #0E7C59;' : 'background: #F4F6F4; color: #16201B; border: 1px solid #DCE1DD;')
+          };
+        }),
+        status: has ? 'Guardado' : 'Pendiente',
+        chip: 'font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; ' + (has ? 'background: #E1F3EA; color: #0B6B4B;' : 'background: #EEF0EE; color: #4A544F;'),
+        desc: has ? desc[s] : 'Toca una nota para calificar',
+        descColor: has ? '#16201B' : '#5B6660'
+      });
+    });
+    return { groups: groups, teams: teams, current: this.state.sel, done: n, left: 12 - n, pct: Math.round(n / 12 * 100) };
+  }
+}
+</script>
+</body>
+</html>

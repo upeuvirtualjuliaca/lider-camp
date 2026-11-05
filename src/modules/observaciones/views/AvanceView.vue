@@ -22,6 +22,12 @@ import {
 import { incidenciasService } from '@/modules/incidencias/services/incidencias.service'
 import { useSessionStore } from '@/modules/auth/store'
 import { useCampamentoStore } from '@/stores/campamento'
+import ProgressRing   from '@/components/ui/ProgressRing.vue'
+import DayStatusCard  from '../components/DayStatusCard.vue'
+import ProgressMatrix from '../components/ProgressMatrix.vue'
+import CriterionStrip from '../components/CriterionStrip.vue'
+import type { MGroupData } from '../components/MatrixGroup.vue'
+import type { MTeamData }  from '../components/ProgressMatrix.vue'
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 interface ProgramacionDia {
@@ -60,13 +66,9 @@ const puntajesDia = ref<PuntajeEquipoDia[]>([])
 const progreso = ref<ProgresoEvaluacion[]>([])
 const liderazgoDia = ref<LiderazgoEquipoDia[]>([])
 const actividadesDia = ref<ActividadConProgramacion[]>([])
-// clave: `${actividad_id}|${equipo_id}` → puntaje
 const actMap = ref<Map<string, number | null>>(new Map())
-// equipo_id → total bonus / deméritos
 const bonusMap    = ref<Map<string, number>>(new Map())
 const demeritosMap = ref<Map<string, number>>(new Map())
-
-// Observaciones por criterio+equipo: clave `${programacion_id}|${equipo_id}`
 const obsMap = ref<Map<string, number | null>>(new Map())
 
 // Dialogs
@@ -121,12 +123,6 @@ const progresoDelDia = computed<ProgresoEvaluacion | undefined>(() =>
 
 const porcentaje = computed(() => Math.round(progresoDelDia.value?.porcentaje ?? 0))
 
-const progresoBg = computed(() => {
-  if (porcentaje.value >= 100) return 'bg-green-500'
-  if (porcentaje.value >= 60) return 'bg-yellow-400'
-  return 'bg-red-400'
-})
-
 // Total del día por equipo: rúbrica + actividades + liderazgo + bonus − deméritos
 const totalDiaMap = computed(() => {
   const map = new Map<string, number>()
@@ -136,7 +132,6 @@ const totalDiaMap = computed(() => {
     const bonus     = bonusMap.value.get(eq.id) ?? 0
     const demeritos = demeritosMap.value.get(eq.id) ?? 0
 
-    // Suma de actividades de este equipo
     let actividades = 0
     for (const act of actividadesDia.value) {
       actividades += actMap.value.get(`${act.id}|${eq.id}`) ?? 0
@@ -167,7 +162,6 @@ async function cargarDatosDia() {
     progreso.value = progresoData
     liderazgoDia.value = lidData
     const actFiltradas = actData.filter((a) => a.estado !== 'cancelada')
-    // Contar actividades por programacion_id para dividir el puntaje_max
     const contProg: Record<string, number> = {}
     for (const a of actFiltradas) {
       const pid = a.programacion_id ?? ''
@@ -178,20 +172,17 @@ async function cargarDatosDia() {
       _puntaje_individual: Math.round(a.programacion.puntaje_max / (contProg[a.programacion_id ?? ''] ?? 1)),
     })) as any
 
-    // Cargar puntajes por equipo para cada actividad (suma de actividad_eval_registros)
     const newActMap = new Map<string, number | null>()
     await Promise.all(
       actFiltradas.map(async (a) => {
         try {
           const registros = await evalRegistrosService.getPorActividad(a.id)
-          // Agrupar por (criterio, equipo) y promediar entre evaluadores
           const byKey = new Map<string, number[]>()
           for (const r of registros) {
             const key = `${r.criterio_eval_id}|${r.equipo_id}`
             if (!byKey.has(key)) byKey.set(key, [])
             byKey.get(key)!.push(Number(r.puntaje))
           }
-          // Sumar promedios por equipo
           const totales: Record<string, number> = {}
           for (const [key, puntajes] of byKey) {
             const equipoId = key.split('|')[1] ?? ''
@@ -207,7 +198,6 @@ async function cargarDatosDia() {
     )
     actMap.value = newActMap
 
-    // Cargar bonus y deméritos validados solo del día activo
     const newBonusMap     = new Map<string, number>()
     const newDemeritosMap = new Map<string, number>()
     const incData = await incidenciasService.getValidadasPorMomento(momentoActivo.value, campId)
@@ -234,7 +224,6 @@ async function cargarObservacionesDetalle() {
     .map(async (prog) => {
       try {
         const obs = await observacionesService.getPorCriterioYDia(prog.id)
-        // Agrupar por equipo y promediar (puede haber varios evaluadores por equipo)
         const byEquipo = new Map<string, number[]>()
         for (const o of obs) {
           if (!byEquipo.has(o.equipo_id)) byEquipo.set(o.equipo_id, [])
@@ -267,13 +256,6 @@ function getCelda(
   const val = obsMap.value.get(key)
   if (val !== undefined && val !== null) return { tipo: 'puntaje', valor: val }
   return { tipo: 'pendiente', valor: null }
-}
-
-function celdaClase(tipo: string) {
-  if (tipo === 'puntaje')   return 'bg-green-100 text-green-800 font-bold'
-  if (tipo === 'pendiente') return 'bg-yellow-50 text-yellow-700'
-  if (tipo === 'cancelado') return 'bg-red-50 text-red-500 text-[10px] font-semibold'
-  return 'bg-gray-50 text-gray-400'
 }
 
 // ── Cerrar / Abrir día ────────────────────────────────────────────────────────
@@ -331,238 +313,487 @@ async function supabase_safe<T>(fn: () => Promise<T>): Promise<{ data: T; error:
     return { data: null, error: e instanceof Error ? e.message : 'Error desconocido' }
   }
 }
+
+// ── Display helpers (solo presentación) ──────────────────────────────────────
+const esAdmin    = computed(() => session.rol === 'admin')
+const closedGroups = ref<Set<string>>(new Set())
+const mobileTab  = ref<'criterio' | 'equipo'>('criterio')
+
+function toggleGroup(id: string) {
+  const s = new Set(closedGroups.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  closedGroups.value = s
+}
+
+function iniciales(nombre: string): string {
+  const words = nombre.trim().split(/\s+/).filter(Boolean)
+  if (words.length >= 2) return (words[0]![0]! + words[1]![0]!).toUpperCase()
+  return nombre.substring(0, 2).toUpperCase()
+}
+
+const pendientesCount = computed(() =>
+  Math.max(0,
+    (progresoDelDia.value?.observaciones_esperadas ?? 0) -
+    (progresoDelDia.value?.observaciones_registradas ?? 0),
+  )
+)
+
+// Group definitions
+const GRUPOS_DEF = [
+  { id: 'armado',     nombre: 'Armado del campamento',   keys: ['Carpa', 'Cerco', 'Basurero', 'Tendedero', 'Portada'] },
+  { id: 'cocina',     nombre: 'Orden y cocina',          keys: ['Orden', 'Cocina'] },
+  { id: 'ceremonias', nombre: 'Ceremonias y conducta',   keys: ['Izamiento', 'Barra', 'Programa', 'Participación', 'Respeta', 'Campamento'] },
+]
+
+function getGrupoId(nombre: string): string {
+  for (const g of GRUPOS_DEF) {
+    if (g.keys.some(k => nombre.startsWith(k) || nombre.includes(k))) return g.id
+  }
+  return 'otros'
+}
+
+interface MCellData  { tipo: 'puntaje'|'pendiente'|'na'|'cancelado'; valor?: string|null }
+interface MRowData   { id: string; nombre: string; maxLabel: string; nameColor: string; cells: MCellData[]; av: string; avColor: string }
+
+function buildMRows(progs: ProgramacionDia[]): MRowData[] {
+  return progs.map(prog => {
+    const cells: MCellData[] = equipos.value.map(eq => {
+      const c = getCelda(prog, eq)
+      return { tipo: c.tipo, valor: c.tipo === 'puntaje' ? String(c.valor) : null }
+    })
+    const done = cells.filter(c => c.tipo === 'puntaje').length
+    const naAll = prog.estado === 'no_programado'
+    return {
+      id: prog.id,
+      nombre: prog.criterios.nombre,
+      maxLabel: naAll ? 'no se evalúa hoy' : `máx. ${prog.puntaje_max}`,
+      nameColor: naAll ? '#8A948E' : '#16201B',
+      cells,
+      av: naAll ? '—' : `${done}/12`,
+      avColor: done === 12 ? '#0B6B4B' : '#16201B',
+    }
+  })
+}
+
+const teamColumns = computed((): MTeamData[] => {
+  const pctMap = new Map<string, number>()
+  for (const eq of equipos.value) {
+    let d = 0, t = 0
+    for (const prog of programacionDia.value) {
+      if (prog.estado === 'programado') {
+        t++
+        if (obsMap.value.get(`${prog.id}|${eq.id}`) != null) d++
+      }
+    }
+    pctMap.set(eq.id, t ? Math.round(d / t * 100) : 0)
+  }
+  return equipos.value.map(eq => ({
+    id: eq.id,
+    nombre: eq.nombre,
+    color: (eq as any).color ?? '#0E7C59',
+    iniciales: iniciales(eq.nombre),
+    pct: pctMap.get(eq.id) ?? 0,
+  }))
+})
+
+const gruposMatriz = computed((): MGroupData[] => {
+  const byId = new Map<string, ProgramacionDia[]>()
+  for (const prog of programacionDia.value) {
+    const gid = getGrupoId(prog.criterios.nombre)
+    if (!byId.has(gid)) byId.set(gid, [])
+    byId.get(gid)!.push(prog)
+  }
+
+  const defs = [...GRUPOS_DEF, ...(byId.has('otros') ? [{ id: 'otros', nombre: 'Otros criterios', keys: [] as string[] }] : [])]
+  const result: MGroupData[] = defs
+    .filter(g => byId.has(g.id))
+    .map(g => {
+      const rows = buildMRows(byId.get(g.id)!)
+      let td = 0, tt = 0
+      for (const r of rows) for (const c of r.cells) { if (c.tipo !== 'na') { tt++; if (c.tipo === 'puntaje') td++ } }
+      return { id: g.id, nombre: g.nombre, rows, summary: `${td} de ${tt}`, pct: tt ? Math.round(td / tt * 100) : 0, open: !closedGroups.value.has(g.id) }
+    })
+
+  // Actividades
+  if (actividadesDia.value.length) {
+    const actRows: MRowData[] = (actividadesDia.value as any[]).map(act => {
+      const cells: MCellData[] = equipos.value.map(eq => {
+        const v = actMap.value.get(`${act.id}|${eq.id}`)
+        return { tipo: v != null ? 'puntaje' as const : 'pendiente' as const, valor: v != null ? String(Math.round(v)) : null }
+      })
+      const done = cells.filter(c => c.tipo === 'puntaje').length
+      return { id: act.id, nombre: act.nombre, maxLabel: `máx. ${act._puntaje_individual ?? act.programacion?.puntaje_max ?? ''}`, nameColor: '#16201B', cells, av: `${done}/12`, avColor: done === 12 ? '#0B6B4B' : '#16201B' }
+    })
+    const td = actRows.reduce((s, r) => s + r.cells.filter(c => c.tipo === 'puntaje').length, 0)
+    const tt = actRows.reduce((s, r) => s + r.cells.filter(c => c.tipo !== 'na').length, 0)
+    result.push({ id: 'actividades', nombre: 'Actividades', rows: actRows, summary: `${td} de ${tt}`, pct: tt ? Math.round(td / tt * 100) : 0, open: !closedGroups.value.has('actividades') })
+  }
+
+  // Liderazgo
+  if (liderazgoDia.value.length) {
+    const cells: MCellData[] = equipos.value.map(eq => {
+      const c = getLidCelda(eq)
+      const isOk = c.texto && c.texto !== '—' && !c.clase.includes('yellow')
+      return { tipo: isOk ? 'puntaje' as const : (c.texto === '' ? 'pendiente' as const : 'na' as const), valor: c.texto || null }
+    })
+    const done = cells.filter(c => c.tipo === 'puntaje').length
+    result.push({ id: 'liderazgo', nombre: 'Liderazgo', rows: [{ id: 'lid', nombre: 'Liderazgo', maxLabel: 'máx. 100', nameColor: '#16201B', cells, av: `${done}/12`, avColor: done === 12 ? '#0B6B4B' : '#16201B' }], summary: `${done} de 12`, pct: Math.round(done / 12 * 100), open: !closedGroups.value.has('liderazgo') })
+  }
+
+  // Ajustes
+  if (bonusMap.value.size || demeritosMap.value.size) {
+    const bCells: MCellData[] = equipos.value.map(eq => { const v = bonusMap.value.get(eq.id) ?? 0; return { tipo: v > 0 ? 'puntaje' as const : 'na' as const, valor: v > 0 ? `+${v}` : null } })
+    const dCells: MCellData[] = equipos.value.map(eq => { const v = demeritosMap.value.get(eq.id) ?? 0; return { tipo: v > 0 ? 'cancelado' as const : 'na' as const, valor: v > 0 ? `−${v}` : null } })
+    result.push({ id: 'ajustes', nombre: 'Ajustes validados', rows: [{ id: 'bonus', nombre: 'Bonus', maxLabel: 'validados', nameColor: '#16201B', cells: bCells, av: '', avColor: '#16201B' }, { id: 'demerito', nombre: 'Deméritos', maxLabel: 'validados', nameColor: '#16201B', cells: dCells, av: '', avColor: '#16201B' }], summary: 'bonus y deméritos', pct: 100, open: !closedGroups.value.has('ajustes') })
+  }
+
+  return result
+})
+
+const totalRow = computed(() => equipos.value.map(eq => String(totalDiaMap.value.get(eq.id) ?? 0)))
+
+// Mobile stats
+const teamStats = computed(() => equipos.value.map(eq => {
+  const prog = programacionDia.value.filter(p => p.estado === 'programado')
+  const done = prog.filter(p => obsMap.value.get(`${p.id}|${eq.id}`) != null).length
+  const pct  = prog.length ? Math.round(done / prog.length * 100) : 0
+  return { ...eq, iniciales: iniciales(eq.nombre), color: (eq as any).color ?? '#0E7C59', pct, pts: totalDiaMap.value.get(eq.id) ?? 0, done, total: prog.length }
+}))
+
+const mobileGrupos = computed(() =>
+  gruposMatriz.value.map(g => ({
+    ...g,
+    rows: g.rows.map(r => ({
+      ...r,
+      dots: r.cells.map(c =>
+        c.tipo === 'puntaje'   ? '#0E7C59' :
+        c.tipo === 'pendiente' ? '#F3C969' :
+        c.tipo === 'cancelado' ? '#F4A6A6' : '#E3E7E4',
+      ),
+    })),
+  })),
+)
+
+const noCriterios = computed(() => !programacionDia.value.length && !liderazgoDia.value.length && !actividadesDia.value.length)
 </script>
 
 <template>
-  <div class="av-page">
+  <div
+    class="flex flex-col flex-1 min-h-0 overflow-hidden"
+    style="font-family: Inter, system-ui, sans-serif; background: #F4F6F4; color: #16201B"
+  >
 
-    <!-- ── Header ── -->
-    <header class="av-header">
-      <div>
-        <h1 class="av-title">Avance de evaluación</h1>
-        <p class="av-sub">Progreso del día por criterio y equipo</p>
+    <!-- ═══════════════ LOADING SKELETON ═══════════════ -->
+    <div v-if="cargando" class="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
+      <!-- Header skeleton -->
+      <div class="bg-white border border-[#E3E7E4] rounded-2xl h-16 animate-pulse" />
+      <!-- Summary skeleton -->
+      <div class="flex gap-3">
+        <div class="flex-[2] bg-white border border-[#E3E7E4] rounded-2xl h-24 animate-pulse" />
+        <div class="flex-1 bg-white border border-[#E3E7E4] rounded-2xl h-24 animate-pulse" />
       </div>
-    </header>
-
-    <!-- ── Cargando / Error ── -->
-    <div v-if="cargando" class="av-empty">
-      <i class="pi pi-spin pi-spinner" style="font-size:1.5rem" />
+      <!-- Matrix skeleton -->
+      <div class="bg-white border border-[#E3E7E4] rounded-2xl overflow-hidden">
+        <div class="h-12 border-b border-[#EEF1EF] animate-pulse bg-[#F4F6F4]" />
+        <div v-for="i in 6" :key="i" class="h-11 border-b border-[#EEF1EF] animate-pulse" :class="i % 2 === 0 ? 'bg-[#FAFBFA]' : 'bg-white'" />
+      </div>
     </div>
-    <div v-else-if="error" class="av-empty av-empty--error">
-      <i class="pi pi-exclamation-circle" /> {{ error }}
+
+    <!-- ═══════════════ ERROR ═══════════════ -->
+    <div v-else-if="error" class="flex-1 flex items-center justify-center p-8 text-center">
+      <div class="flex flex-col items-center gap-3">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#A3261F" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+        <p class="text-[14px] text-[#A3261F]">{{ error }}</p>
+        <button class="h-9 px-4 rounded-xl bg-[#0E7C59] text-white text-[13px] font-semibold font-[inherit]" @click="cargar">Reintentar</button>
+      </div>
     </div>
 
     <template v-else>
 
-      <!-- ── Selector de día ── -->
-      <div class="av-dias">
-        <button
-          v-for="m in momentosFiltrados"
-          :key="m"
-          :class="['av-dia-btn',
-            momentoActivo === m && 'av-dia-btn--active',
-            dias.find(d => d.momento === m)?.cerrado && momentoActivo !== m && 'av-dia-btn--cerrado']"
-          @click="seleccionarMomento(m)"
-        >
-          {{ labelDia(m) }}
-          <span v-if="dias.find(d => d.momento === m)?.cerrado" class="av-dia-badge">
-            <i class="pi pi-lock" />
-          </span>
-        </button>
-      </div>
+      <!-- ══════════════════════════════════
+           MOBILE: < md
+      ══════════════════════════════════ -->
+      <div class="md:hidden flex flex-col flex-1 overflow-hidden">
 
-      <!-- ── Tarjeta de progreso ── -->
-      <div v-if="progresoDelDia" class="av-progreso-card">
-        <div class="av-progreso-card__top">
-          <span class="av-progreso-card__texto">
-            <strong>{{ progresoDelDia.observaciones_registradas ?? 0 }}</strong>
-            de
-            <strong>{{ progresoDelDia.observaciones_esperadas ?? 0 }}</strong>
-            observaciones registradas
-          </span>
-          <span
-            :class="['av-pct',
-              porcentaje >= 100 ? 'av-pct--ok' :
-              porcentaje >= 60  ? 'av-pct--mid' : 'av-pct--low']"
-          >{{ porcentaje }}%</span>
-        </div>
-        <div class="av-barra">
-          <div
-            class="av-barra__fill"
-            :class="porcentaje >= 100 ? 'av-barra__fill--ok' : porcentaje >= 60 ? 'av-barra__fill--mid' : 'av-barra__fill--low'"
-            :style="{ width: Math.min(porcentaje, 100) + '%' }"
-          />
-        </div>
-      </div>
-
-      <!-- ── Cerrar / Reabrir día ── -->
-      <div class="av-acciones">
-        <button v-if="!diaCerrado" class="btn btn--amber" @click="dialogCerrar = true">
-          <i class="pi pi-lock" /> Cerrar día
-        </button>
-        <button v-else class="btn btn--ghost" @click="dialogAbrir = true">
-          <i class="pi pi-lock-open" /> Reabrir día
-        </button>
-        <span :class="['av-estado-badge', diaCerrado ? 'av-estado-badge--cerrado' : 'av-estado-badge--abierto']">
-          <i :class="diaCerrado ? 'pi pi-lock' : 'pi pi-lock-open'" />
-          {{ diaCerrado ? 'Día cerrado' : 'Día abierto' }}
-        </span>
-      </div>
-
-      <!-- ── Matriz criterios × equipos ── -->
-      <div class="av-matriz-wrap">
-        <div class="av-matriz-header">
-          <p class="av-matriz-titulo">Observaciones — {{ labelDia(momentoActivo) }}</p>
-          <div class="av-leyenda">
-            <span class="av-leyenda-item">
-              <span class="av-leyenda-dot av-leyenda-dot--ok" /> Registrado
-            </span>
-            <span class="av-leyenda-item">
-              <span class="av-leyenda-dot av-leyenda-dot--pend" /> Pendiente
-            </span>
-            <span class="av-leyenda-item">
-              <span class="av-leyenda-dot av-leyenda-dot--canc" /> Cancelado
-            </span>
-            <span class="av-leyenda-item">
-              <span class="av-leyenda-dot av-leyenda-dot--na" /> N/A
-            </span>
+        <!-- Mobile header -->
+        <header class="bg-white border-b border-[#E3E7E4] flex-shrink-0">
+          <!-- Title row -->
+          <div class="flex items-center justify-between px-4 h-14">
+            <div class="flex flex-col">
+              <span class="text-[17px] font-bold text-[#16201B] leading-tight">Avance</span>
+              <span class="text-[12px] text-[#5B6660]">Seguimiento</span>
+            </div>
           </div>
-        </div>
+          <!-- Day selector -->
+          <div
+            role="tablist"
+            aria-label="Día"
+            class="flex gap-1.5 overflow-x-auto px-4 pb-3 scrollbar-none"
+          >
+            <button
+              v-for="m in momentosFiltrados"
+              :key="m"
+              role="tab"
+              :aria-selected="momentoActivo === m"
+              class="flex-shrink-0 h-[38px] px-3.5 rounded-[10px] text-[13px] font-semibold border transition-colors font-[inherit]"
+              :class="momentoActivo === m
+                ? 'bg-[#0E7C59] text-white border-[#0E7C59]'
+                : 'bg-white text-[#16201B] border-[#DCE1DD]'"
+              @click="seleccionarMomento(m)"
+            >
+              {{ labelDia(m) }}
+              <svg v-if="dias.find(d => d.momento === m)?.cerrado" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" class="inline ml-1" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            </button>
+          </div>
+          <!-- View tabs -->
+          <div role="tablist" aria-label="Vista" class="flex gap-6 px-4">
+            <button
+              role="tab"
+              :aria-selected="mobileTab === 'criterio'"
+              class="pb-3 text-[14px] border-b-2 font-[inherit] transition-colors"
+              :class="mobileTab === 'criterio'
+                ? 'text-[#0E7C59] font-semibold border-[#0E7C59]'
+                : 'text-[#5B6660] font-medium border-transparent'"
+              @click="mobileTab = 'criterio'"
+            >Por criterio</button>
+            <button
+              role="tab"
+              :aria-selected="mobileTab === 'equipo'"
+              class="pb-3 text-[14px] border-b-2 font-[inherit] transition-colors"
+              :class="mobileTab === 'equipo'
+                ? 'text-[#0E7C59] font-semibold border-[#0E7C59]'
+                : 'text-[#5B6660] font-medium border-transparent'"
+              @click="mobileTab = 'equipo'"
+            >Por equipo</button>
+          </div>
+        </header>
 
-        <div class="av-tabla-scroll">
-          <table class="av-tabla">
-            <thead>
-              <tr>
-                <th class="av-th av-th--sticky">Criterio</th>
-                <th v-for="eq in equipos" :key="eq.id" class="av-th av-th--eq">
-                  <span class="av-eq-dot" :style="{ background: eq.color }" />
-                  <span class="av-eq-nombre" :title="eq.nombre">{{ eq.nombre }}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <!-- Filas de criterios -->
-              <tr v-for="(prog, idx) in programacionDia" :key="prog.id" class="av-fila">
-                <td class="av-td av-td--sticky">
-                  <span class="av-criterio-num">{{ idx + 1 }}</span>
-                  <span class="av-criterio-nombre">{{ prog.criterios.nombre }}</span>
-                </td>
-                <td
-                  v-for="eq in equipos"
-                  :key="eq.id"
-                  :class="['av-td', 'av-td--celda', `av-celda--${getCelda(prog, eq).tipo}`]"
-                >
-                  <template v-if="getCelda(prog, eq).tipo === 'puntaje'">{{ getCelda(prog, eq).valor }}</template>
-                  <template v-else-if="getCelda(prog, eq).tipo === 'cancelado'">✕</template>
-                  <template v-else-if="getCelda(prog, eq).tipo === 'na'">—</template>
-                </td>
-              </tr>
+        <!-- Mobile content -->
+        <main class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
 
-              <!-- Filas de actividades -->
-              <tr v-for="act in actividadesDia" :key="act.id" class="av-fila av-fila--act">
-                <td class="av-td av-td--sticky">
-                  <span class="av-criterio-num">Act</span>
-                  <span class="av-criterio-nombre">{{ act.nombre }}</span>
-                  <span class="av-act-pts">{{ (act as any)._puntaje_individual }} pts</span>
-                </td>
-                <td
-                  v-for="eq in equipos"
-                  :key="eq.id"
-                  :class="['av-td', 'av-td--celda',
-                    actMap.get(`${act.id}|${eq.id}`) != null
-                      ? 'av-celda--puntaje'
-                      : 'av-celda--pendiente']"
-                >
-                  {{ actMap.get(`${act.id}|${eq.id}`) ?? '—' }}
-                </td>
-              </tr>
+          <!-- Summary card -->
+          <section class="bg-white border border-[#E3E7E4] rounded-2xl px-4 py-3.5 flex items-center gap-3">
+            <ProgressRing :percent="porcentaje" :size="56" :thickness="8" />
+            <div class="flex-1 flex flex-col gap-0.5">
+              <span class="text-[16px] font-bold">
+                {{ progresoDelDia?.observaciones_registradas ?? 0 }}
+                <span class="text-[14px] font-normal text-[#5B6660]">de {{ progresoDelDia?.observaciones_esperadas ?? 0 }}</span>
+              </span>
+              <span class="text-[12px] text-[#5B6660]">observaciones registradas</span>
+              <span v-if="pendientesCount > 0" class="text-[12px] font-semibold text-[#7A4F00]">{{ pendientesCount }} pendientes</span>
+            </div>
+            <span
+              class="self-start flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-[10px]"
+              :class="diaCerrado ? 'bg-[#EEF1EF] text-[#5B6660]' : 'bg-[#E1F3EA] text-[#0B6B4B]'"
+            >
+              <svg v-if="diaCerrado" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+              <span v-else class="w-[6px] h-[6px] rounded-full bg-[#0E7C59]" aria-hidden="true" />
+              {{ diaCerrado ? 'Cerrado' : 'Abierto' }}
+            </span>
+          </section>
 
-              <!-- Fila Liderazgo -->
-              <tr v-if="liderazgoDia.length > 0" class="av-fila av-fila--lid">
-                <td class="av-td av-td--sticky">
-                  <span class="av-criterio-badge av-criterio-badge--lid">LID</span>
-                  <span class="av-criterio-nombre">Liderazgo</span>
-                </td>
-                <td
-                  v-for="eq in equipos"
-                  :key="eq.id"
-                  :class="['av-td', 'av-td--celda', getLidCelda(eq).clase]"
-                >
-                  {{ getLidCelda(eq).texto }}
-                </td>
-              </tr>
+          <!-- Sin criterios -->
+          <div v-if="noCriterios" class="bg-white border border-[#E3E7E4] rounded-2xl px-5 py-10 text-center">
+            <p class="text-[14px] text-[#5B6660]">No hay criterios programados para este día.</p>
+          </div>
 
-              <!-- Fila Bonus -->
-              <tr v-if="bonusMap.size > 0" class="av-fila av-fila--bonus">
-                <td class="av-td av-td--sticky">
-                  <span class="av-criterio-num">B</span>
-                  <span class="av-criterio-nombre">Bonus (validados)</span>
-                </td>
-                <td
-                  v-for="eq in equipos"
-                  :key="eq.id"
-                  :class="['av-td', 'av-td--celda',
-                    bonusMap.get(eq.id) ? 'av-celda--bonus' : 'av-celda--na']"
-                >{{ bonusMap.get(eq.id) ?? '—' }}</td>
-              </tr>
+          <!-- Por criterio -->
+          <template v-else-if="mobileTab === 'criterio'">
+            <section v-for="g in mobileGrupos" :key="g.id" class="flex flex-col gap-2">
+              <div class="flex items-baseline justify-between px-1">
+                <h2 class="m-0 text-[12px] font-bold uppercase tracking-[0.6px] text-[#5B6660]">{{ g.nombre }}</h2>
+                <span class="text-[12px] text-[#5B6660]">{{ g.summary }}</span>
+              </div>
+              <ul class="bg-white border border-[#E3E7E4] rounded-2xl overflow-hidden list-none m-0 p-0">
+                <CriterionStrip
+                  v-for="row in g.rows"
+                  :key="row.id"
+                  :nombre="row.nombre"
+                  :nameColor="row.nameColor"
+                  :dots="(row as any).dots"
+                  :av="row.av"
+                  :avColor="row.avColor"
+                />
+              </ul>
+            </section>
+            <p class="text-[12px] text-[#5B6660] text-center mt-1 mb-3">
+              <span class="inline-flex items-center gap-1 mr-3"><span class="w-3 h-2 rounded-sm bg-[#0E7C59] inline-block" /> Calificado</span>
+              <span class="inline-flex items-center gap-1 mr-3"><span class="w-3 h-2 rounded-sm bg-[#F3C969] inline-block" /> Pendiente</span>
+              <span class="inline-flex items-center gap-1"><span class="w-3 h-2 rounded-sm bg-[#E3E7E4] inline-block" /> No hoy</span>
+            </p>
+          </template>
 
-              <!-- Fila Deméritos -->
-              <tr v-if="demeritosMap.size > 0" class="av-fila av-fila--demerito">
-                <td class="av-td av-td--sticky">
-                  <span class="av-criterio-num">D</span>
-                  <span class="av-criterio-nombre">Deméritos (validados)</span>
-                </td>
-                <td
-                  v-for="eq in equipos"
-                  :key="eq.id"
-                  :class="['av-td', 'av-td--celda',
-                    demeritosMap.get(eq.id) ? 'av-celda--demerito' : 'av-celda--na']"
-                >{{ demeritosMap.get(eq.id) ?? '—' }}</td>
-              </tr>
+          <!-- Por equipo -->
+          <template v-else>
+            <ul class="bg-white border border-[#E3E7E4] rounded-2xl overflow-hidden list-none m-0 p-0">
+              <li v-for="eq in teamStats" :key="eq.id" class="border-b border-[#EEF1EF] last:border-b-0">
+                <div class="flex items-center gap-3 px-4 min-h-[62px] py-3">
+                  <span
+                    class="w-[38px] h-[38px] rounded-[11px] flex items-center justify-center font-bold text-[13px] text-white flex-shrink-0"
+                    :style="{ background: eq.color }"
+                  >{{ eq.iniciales }}</span>
+                  <div class="flex-1 min-w-0 flex flex-col gap-0.5">
+                    <span class="text-[15px] font-semibold text-[#16201B] truncate">{{ eq.nombre }}</span>
+                    <span class="text-[12px] text-[#5B6660]">{{ eq.done }}/{{ eq.total }} calificados · {{ eq.pts }} pts</span>
+                  </div>
+                  <ProgressRing :percent="eq.pct" :size="38" :thickness="6" />
+                </div>
+              </li>
+            </ul>
+          </template>
 
-              <!-- Fila Total día -->
-              <tr class="av-fila av-fila--total">
-                <td class="av-td av-td--sticky av-td--total">
-                  <span class="av-criterio-nombre" style="font-weight:800">Total del día</span>
-                </td>
-                <td
-                  v-for="eq in equipos"
-                  :key="eq.id"
-                  class="av-td av-td--celda av-celda--total"
-                >{{ totalDiaMap.get(eq.id) ?? 0 }}</td>
-              </tr>
+        </main>
 
-              <!-- Sin datos -->
-              <tr v-if="!programacionDia.length && !liderazgoDia.length">
-                <td :colspan="equipos.length + 1" class="av-td-vacio">
-                  Sin criterios programados para este día.
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <!-- Mobile footer: solo admin -->
+        <footer v-if="esAdmin" class="bg-white border-t border-[#E3E7E4] px-4 py-3 flex-shrink-0">
+          <button
+            v-if="!diaCerrado"
+            class="w-full h-[50px] rounded-[14px] border border-[#16201B] bg-white text-[15px] font-semibold text-[#16201B] flex items-center justify-center gap-2 font-[inherit]"
+            @click="dialogCerrar = true"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            Cerrar día
+          </button>
+          <button
+            v-else
+            class="w-full h-[50px] rounded-[14px] border border-[#DCE1DD] bg-white text-[15px] font-semibold text-[#16201B] flex items-center justify-center gap-2 font-[inherit]"
+            @click="dialogAbrir = true"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="11" width="14" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+            Reabrir día
+          </button>
+        </footer>
+      </div>
+
+      <!-- ══════════════════════════════════
+           TABLET + DESKTOP: ≥ md
+      ══════════════════════════════════ -->
+      <div class="hidden md:flex flex-col flex-1 overflow-hidden">
+
+        <!-- Header -->
+        <header class="bg-white border-b border-[#E3E7E4] px-6 py-3 flex flex-wrap items-center gap-3 flex-shrink-0">
+          <div class="flex flex-col mr-auto">
+            <span class="text-[12px] text-[#5B6660]">Seguimiento</span>
+            <span class="text-[18px] font-bold text-[#16201B]">Avance de evaluación</span>
+          </div>
+          <!-- Day tabs -->
+          <div role="tablist" aria-label="Día" class="flex gap-1.5 flex-wrap">
+            <button
+              v-for="m in momentosFiltrados"
+              :key="m"
+              role="tab"
+              :aria-selected="momentoActivo === m"
+              class="h-[38px] px-3.5 rounded-[10px] text-[13px] font-semibold border transition-colors font-[inherit] flex items-center gap-1.5"
+              :class="momentoActivo === m
+                ? 'bg-[#0E7C59] text-white border-[#0E7C59]'
+                : 'bg-white text-[#16201B] border-[#DCE1DD] hover:bg-[#F4F6F4]'"
+              @click="seleccionarMomento(m)"
+            >
+              {{ labelDia(m) }}
+              <svg v-if="dias.find(d => d.momento === m)?.cerrado" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <!-- Content area -->
+        <div class="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-4">
+
+          <!-- Summary row -->
+          <section aria-label="Resumen" class="flex flex-wrap gap-3">
+            <!-- Progress card -->
+            <div class="flex-[2_1_320px] bg-white border border-[#E3E7E4] rounded-2xl px-5 py-4 flex items-center gap-4">
+              <ProgressRing :percent="porcentaje" :size="64" :thickness="9" />
+              <div class="flex flex-col gap-1">
+                <span class="text-[13px] text-[#5B6660]">Observaciones registradas · {{ labelDia(momentoActivo) }}</span>
+                <span class="text-[22px] font-bold leading-tight">
+                  {{ progresoDelDia?.observaciones_registradas ?? 0 }}
+                  <span class="text-[14px] font-medium text-[#5B6660]">de {{ progresoDelDia?.observaciones_esperadas ?? 0 }}</span>
+                </span>
+                <span v-if="pendientesCount > 0" class="text-[12px] font-semibold text-[#7A4F00]">{{ pendientesCount }} pendientes</span>
+              </div>
+            </div>
+            <!-- Day status card -->
+            <div class="flex-[1_1_280px] bg-white border border-[#E3E7E4] rounded-2xl px-5 py-4">
+              <DayStatusCard
+                :cerrado="diaCerrado"
+                :esAdmin="esAdmin"
+                :pendientes="pendientesCount"
+                @cerrar="dialogCerrar = true"
+                @reabrir="dialogAbrir = true"
+              />
+            </div>
+          </section>
+
+          <!-- Matrix section -->
+          <section aria-label="Matriz de avance" class="bg-white border border-[#E3E7E4] rounded-2xl overflow-hidden">
+            <!-- Matrix header + legend -->
+            <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 border-b border-[#EEF1EF]">
+              <h2 class="m-0 text-[15px] font-bold text-[#16201B]">Criterios × equipos</h2>
+              <div class="flex flex-wrap gap-4 text-[12px] text-[#5B6660]">
+                <span class="flex items-center gap-1.5">
+                  <span class="w-[22px] h-[16px] rounded-[4px] bg-[#E1F3EA] text-[10px] font-bold text-[#0B6B4B] flex items-center justify-center">25</span>
+                  Calificado
+                </span>
+                <span class="flex items-center gap-1.5">
+                  <span class="w-[22px] h-[16px] rounded-[4px] bg-[#FFF1D6] flex items-center justify-center">
+                    <span class="w-[6px] h-[6px] rounded-full bg-[#B07800]" />
+                  </span>
+                  Pendiente
+                </span>
+                <span class="flex items-center gap-1.5">
+                  <span class="w-[22px] h-[16px] rounded-[4px] bg-[#F4F6F4] text-[10px] text-[#8A948E] flex items-center justify-center">—</span>
+                  No se evalúa hoy
+                </span>
+                <span class="flex items-center gap-1.5">
+                  <span class="w-[22px] h-[16px] rounded-[4px] bg-[#FDECEC] text-[10px] text-[#A3261F] font-semibold flex items-center justify-center">×</span>
+                  Cancelado
+                </span>
+              </div>
+            </div>
+
+            <!-- Sin criterios -->
+            <div v-if="noCriterios" class="px-5 py-10 text-center">
+              <p class="text-[14px] text-[#5B6660] m-0">No hay criterios programados para este día.</p>
+            </div>
+
+            <!-- Matrix table: compact on tablet (md < xl), full on xl -->
+            <ProgressMatrix
+              v-else
+              :equipos="teamColumns"
+              :grupos="gruposMatriz"
+              :totalRow="totalRow"
+              :compact="false"
+              @toggleGroup="toggleGroup"
+            />
+          </section>
+
         </div>
       </div>
 
     </template>
 
-    <!-- ── Modal cerrar día ── -->
+    <!-- ═══════════════ MODAL CERRAR DÍA ═══════════════ -->
     <Teleport to="body">
-      <div v-if="dialogCerrar" class="m-overlay" @click.self="dialogCerrar = false">
-        <div class="m-confirm">
-          <div class="m-confirm__drag" />
-          <div class="m-confirm__icon m-confirm__icon--amber">
-            <i class="pi pi-lock" />
+      <div v-if="dialogCerrar" class="fixed inset-0 z-[200] flex items-end justify-center sm:items-center bg-black/45 backdrop-blur-sm" @click.self="dialogCerrar = false">
+        <div class="w-full max-w-[360px] bg-white rounded-[20px_20px_0_0] sm:rounded-2xl px-6 pt-5 pb-8 sm:py-6 flex flex-col items-center gap-3 shadow-xl">
+          <div class="w-9 h-1 rounded-full bg-[#E3E7E4] mb-1 sm:hidden" />
+          <div class="w-13 h-13 rounded-full bg-[#EEF1EF] flex items-center justify-center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16201B" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
           </div>
-          <h3 class="m-confirm__title">¿Cerrar el día?</h3>
-          <p class="m-confirm__dia">{{ labelDia(momentoActivo) }}</p>
-          <p class="m-confirm__desc">Los evaluadores ya no podrán registrar observaciones.</p>
-          <div v-if="errorDialog" class="m-confirm__error">
-            <i class="pi pi-exclamation-circle" /> {{ errorDialog }}
-          </div>
-          <div class="m-confirm__btns">
-            <button class="btn btn--ghost" :disabled="procesandoDia" @click="dialogCerrar = false">Cancelar</button>
-            <button class="btn btn--amber" :disabled="procesandoDia" @click="cerrarDia">
-              <i :class="procesandoDia ? 'pi pi-spin pi-spinner' : 'pi pi-lock'" />
+          <h3 class="m-0 text-[16px] font-bold text-[#16201B]">¿Cerrar el día?</h3>
+          <p class="m-0 text-[14px] text-[#5B6660] text-center">{{ labelDia(momentoActivo) }}</p>
+          <p class="m-0 text-[13px] text-[#5B6660] text-center leading-snug">
+            Los evaluadores ya no podrán registrar observaciones.
+            <template v-if="pendientesCount > 0">
+              <strong class="text-[#7A4F00]">Quedan {{ pendientesCount }} observaciones pendientes.</strong>
+            </template>
+          </p>
+          <div v-if="errorDialog" class="w-full text-[13px] text-[#A3261F] bg-[#FDECEC] rounded-xl px-3 py-2.5">{{ errorDialog }}</div>
+          <div class="flex gap-2.5 w-full mt-1">
+            <button class="flex-1 h-11 rounded-xl border border-[#DCE1DD] bg-white text-[14px] font-semibold text-[#16201B] font-[inherit]" :disabled="procesandoDia" @click="dialogCerrar = false">Cancelar</button>
+            <button class="flex-1 h-11 rounded-xl border border-[#16201B] bg-white text-[14px] font-semibold text-[#16201B] font-[inherit] flex items-center justify-center gap-2 disabled:opacity-50" :disabled="procesandoDia" @click="cerrarDia">
+              <svg v-if="!procesandoDia" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+              <svg v-else class="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#16201B" stroke-width="3" stroke-opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#16201B" stroke-width="3" stroke-linecap="round"/></svg>
               {{ procesandoDia ? 'Cerrando…' : 'Cerrar día' }}
             </button>
           </div>
@@ -570,393 +801,29 @@ async function supabase_safe<T>(fn: () => Promise<T>): Promise<{ data: T; error:
       </div>
     </Teleport>
 
-    <!-- ── Modal reabrir día ── -->
+    <!-- ═══════════════ MODAL REABRIR DÍA ═══════════════ -->
     <Teleport to="body">
-      <div v-if="dialogAbrir" class="m-overlay" @click.self="dialogAbrir = false">
-        <div class="m-confirm">
-          <div class="m-confirm__drag" />
-          <div class="m-confirm__icon m-confirm__icon--green">
-            <i class="pi pi-lock-open" />
+      <div v-if="dialogAbrir" class="fixed inset-0 z-[200] flex items-end justify-center sm:items-center bg-black/45 backdrop-blur-sm" @click.self="dialogAbrir = false">
+        <div class="w-full max-w-[360px] bg-white rounded-[20px_20px_0_0] sm:rounded-2xl px-6 pt-5 pb-8 sm:py-6 flex flex-col items-center gap-3 shadow-xl">
+          <div class="w-9 h-1 rounded-full bg-[#E3E7E4] mb-1 sm:hidden" />
+          <div class="w-13 h-13 rounded-full bg-[#E1F3EA] flex items-center justify-center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0B6B4B" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="11" width="14" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
           </div>
-          <h3 class="m-confirm__title">¿Reabrir el día?</h3>
-          <p class="m-confirm__dia">{{ labelDia(momentoActivo) }}</p>
-          <p class="m-confirm__desc">Los evaluadores podrán volver a registrar observaciones.</p>
-          <div v-if="errorDialog" class="m-confirm__error">
-            <i class="pi pi-exclamation-circle" /> {{ errorDialog }}
-          </div>
-          <div class="m-confirm__btns">
-            <button class="btn btn--ghost" :disabled="procesandoDia" @click="dialogAbrir = false">Cancelar</button>
-            <button class="btn btn--primary" :disabled="procesandoDia" @click="abrirDia">
-              <i :class="procesandoDia ? 'pi pi-spin pi-spinner' : 'pi pi-lock-open'" />
+          <h3 class="m-0 text-[16px] font-bold text-[#16201B]">¿Reabrir el día?</h3>
+          <p class="m-0 text-[14px] text-[#5B6660] text-center">{{ labelDia(momentoActivo) }}</p>
+          <p class="m-0 text-[13px] text-[#5B6660] text-center">Los evaluadores podrán volver a registrar observaciones.</p>
+          <div v-if="errorDialog" class="w-full text-[13px] text-[#A3261F] bg-[#FDECEC] rounded-xl px-3 py-2.5">{{ errorDialog }}</div>
+          <div class="flex gap-2.5 w-full mt-1">
+            <button class="flex-1 h-11 rounded-xl border border-[#DCE1DD] bg-white text-[14px] font-semibold text-[#16201B] font-[inherit]" :disabled="procesandoDia" @click="dialogAbrir = false">Cancelar</button>
+            <button class="flex-1 h-11 rounded-xl bg-[#0E7C59] text-[14px] font-semibold text-white font-[inherit] flex items-center justify-center gap-2 disabled:opacity-50" :disabled="procesandoDia" @click="abrirDia">
+              <svg v-if="!procesandoDia" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="11" width="14" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+              <svg v-else class="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#fff" stroke-width="3" stroke-opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
               {{ procesandoDia ? 'Reabriendo…' : 'Reabrir día' }}
             </button>
           </div>
         </div>
       </div>
     </Teleport>
+
   </div>
 </template>
-
-<style scoped>
-/* ─── Page ─── */
-.av-page {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 0 1rem 2rem;
-}
-
-/* ─── Header ─── */
-.av-header { margin-bottom: 1rem; }
-.av-title  { font-size: 1.3rem; font-weight: 800; margin: 0; }
-.av-sub    { font-size: 0.8rem; color: #6b7280; margin: 0.1rem 0 0; }
-
-/* ─── Empty ─── */
-.av-empty {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 0.5rem; padding: 3rem 1rem;
-  text-align: center; color: #9ca3af; font-size: 0.88rem;
-}
-.av-empty--error { color: #dc2626; }
-
-/* ─── Selector de días ─── */
-.av-dias {
-  display: flex;
-  gap: 0.5rem;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  margin-bottom: 1rem;
-  scrollbar-width: none;
-}
-.av-dias::-webkit-scrollbar { display: none; }
-
-.av-dia-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-height: 44px;
-  padding: 0.5rem 1.1rem;
-  border-radius: 22px;
-  border: 2px solid #e5e7eb;
-  background: white;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: #6b7280;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all .15s;
-  flex-shrink: 0;
-}
-.av-dia-btn:hover { border-color: #bbf7d0; color: #15803d; }
-.av-dia-btn--active { background: #16a34a; border-color: #16a34a; color: white; }
-.av-dia-btn--cerrado { background: #fffbeb; border-color: #fde68a; color: #92400e; }
-
-.av-dia-badge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 0.65rem;
-  opacity: .85;
-}
-
-/* ─── Progreso ─── */
-.av-progreso-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,.05);
-}
-.av-progreso-card__top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.6rem;
-}
-.av-progreso-card__texto { font-size: 0.88rem; color: #6b7280; }
-.av-progreso-card__texto strong { color: #111827; }
-
-.av-pct { font-size: 1.2rem; font-weight: 800; white-space: nowrap; }
-.av-pct--ok  { color: #16a34a; }
-.av-pct--mid { color: #d97706; }
-.av-pct--low { color: #dc2626; }
-
-.av-barra {
-  height: 10px;
-  background: #f3f4f6;
-  border-radius: 5px;
-  overflow: hidden;
-}
-.av-barra__fill {
-  height: 100%;
-  border-radius: 5px;
-  transition: width .5s ease;
-}
-.av-barra__fill--ok  { background: #16a34a; }
-.av-barra__fill--mid { background: #f59e0b; }
-.av-barra__fill--low { background: #ef4444; }
-
-/* ─── Acciones cerrar/reabrir ─── */
-.av-acciones {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-
-.av-estado-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.4rem 0.75rem;
-  border-radius: 8px;
-  border: 1px solid;
-}
-.av-estado-badge--abierto { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
-.av-estado-badge--cerrado { background: #fffbeb; border-color: #fde68a; color: #92400e; }
-
-/* ─── Botones ─── */
-.btn {
-  display: inline-flex; align-items: center; gap: 0.4rem;
-  min-height: 44px; padding: 0.5rem 1.1rem;
-  border-radius: 8px; border: none;
-  font-size: 0.88rem; font-weight: 600;
-  cursor: pointer; white-space: nowrap;
-  transition: background .15s;
-}
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn--primary { background: #16a34a; color: white; }
-.btn--primary:hover:not(:disabled) { background: #15803d; }
-.btn--amber { background: #f59e0b; color: white; }
-.btn--amber:hover:not(:disabled) { background: #d97706; }
-.btn--ghost { background: white; border: 2px solid #d1d5db; color: #374151; }
-.btn--ghost:hover:not(:disabled) { background: #f9fafb; }
-
-/* ─── Matriz ─── */
-.av-matriz-wrap {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,.05);
-}
-.av-matriz-header {
-  padding: 0.85rem 1rem 0.6rem;
-  border-bottom: 1px solid #f3f4f6;
-}
-.av-matriz-titulo {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: #9ca3af;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  margin: 0 0 0.5rem;
-}
-.av-leyenda {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-.av-leyenda-item {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.72rem;
-  color: #6b7280;
-}
-.av-leyenda-dot {
-  width: 10px; height: 10px;
-  border-radius: 3px; flex-shrink: 0;
-  border: 1px solid transparent;
-}
-.av-leyenda-dot--ok   { background: #bbf7d0; border-color: #86efac; }
-.av-leyenda-dot--pend { background: #fef9c3; border-color: #fde047; }
-.av-leyenda-dot--canc { background: #fecaca; border-color: #f87171; }
-.av-leyenda-dot--na   { background: #f3f4f6; border-color: #d1d5db; }
-
-.av-tabla-scroll { overflow-x: auto; }
-.av-tabla { border-collapse: collapse; width: 100%; min-width: max-content; }
-
-/* Cabecera */
-.av-th {
-  padding: 0.6rem 0.5rem;
-  background: #f0fdf4;
-  border-bottom: 2px solid #bbf7d0;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: #374151;
-  white-space: nowrap;
-}
-.av-th--sticky {
-  text-align: left;
-  position: sticky; left: 0; z-index: 10;
-  background: #f0fdf4;
-  border-right: 1px solid #bbf7d0;
-  min-width: 140px;
-}
-.av-th--eq {
-  text-align: center;
-  min-width: 60px;
-}
-.av-eq-dot {
-  display: block;
-  width: 10px; height: 10px;
-  border-radius: 50%;
-  margin: 0 auto 0.2rem;
-}
-.av-eq-nombre {
-  display: block;
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: #4b5563;
-  max-width: 56px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Filas */
-.av-fila:hover td { filter: brightness(.97); }
-.av-fila--lid td     { background: #fafafa; }
-.av-fila--act td     { background: #f0f9ff; }
-.av-fila--bonus td   { background: #f0fdf4; }
-.av-fila--demerito td { background: #fff7ed; }
-.av-celda--bonus    { background: #bbf7d0 !important; color: #166534 !important; font-weight: 700; }
-.av-celda--demerito { background: #fed7aa !important; color: #9a3412 !important; font-weight: 700; }
-.av-fila--total td  { background: #1e293b; }
-.av-td--total       { background: #1e293b !important; }
-.av-celda--total    { background: #1e293b !important; color: #f1f5f9 !important; font-weight: 800; font-size: 0.85rem; }
-
-.av-td {
-  padding: 0.45rem 0.4rem;
-  border-bottom: 1px solid #f3f4f6;
-  font-size: 0.78rem;
-  vertical-align: middle;
-}
-.av-td--sticky {
-  position: sticky; left: 0; z-index: 5;
-  background: white;
-  border-right: 1px solid #f3f4f6;
-  padding: 0.5rem 0.6rem;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.av-td--celda {
-  text-align: center;
-  font-weight: 700;
-  font-size: 0.75rem;
-}
-
-/* Criterio badge y nombre */
-.av-criterio-num {
-  font-size: 0.6rem;
-  font-weight: 700;
-  color: #9ca3af;
-  min-width: 14px;
-  text-align: right;
-  flex-shrink: 0;
-}
-.av-criterio-badge {
-  font-size: 0.62rem; font-weight: 800;
-  background: #f3f4f6; color: #4b5563;
-  border-radius: 4px; padding: 0.1rem 0.35rem;
-  white-space: nowrap; flex-shrink: 0;
-}
-.av-criterio-badge--lid {
-  background: #e0e7ff; color: #3730a3;
-}
-.av-act-pts {
-  font-size: 0.62rem;
-  font-weight: 700;
-  color: #0369a1;
-  background: #e0f2fe;
-  border-radius: 4px;
-  padding: 0.1rem 0.3rem;
-  white-space: nowrap;
-  flex-shrink: 0;
-  margin-left: auto;
-}
-.av-criterio-nombre {
-  font-size: 0.72rem; color: #374151;
-  line-height: 1.3;
-}
-
-/* Celdas coloreadas */
-.av-celda--puntaje   { background: #dcfce7; color: #166534; }
-.av-celda--pendiente { background: #fefce8; color: #713f12; }
-.av-celda--cancelado { background: #fee2e2; color: #991b1b; font-size: 0.65rem; }
-.av-celda--na        { background: #f9fafb; color: #9ca3af; }
-
-/* Clases que viene del script (getLidCelda) — sobrescribir */
-.bg-green-100  { background: #dcfce7 !important; }
-.text-green-800 { color: #166534 !important; }
-.bg-yellow-50  { background: #fefce8 !important; }
-.text-yellow-700 { color: #713f12 !important; }
-
-.av-td-vacio {
-  padding: 2rem; text-align: center;
-  color: #9ca3af; font-size: 0.88rem;
-}
-
-/* ─── Modal confirm ─── */
-.m-overlay {
-  position: fixed; inset: 0; z-index: 200;
-  display: flex; align-items: flex-end; justify-content: center;
-  background: rgba(0,0,0,.45);
-  backdrop-filter: blur(4px);
-}
-@media (min-width: 640px) {
-  .m-overlay { align-items: center; }
-}
-
-.m-confirm {
-  position: relative;
-  width: 100%; max-width: 360px;
-  background: white;
-  border-radius: 20px 20px 0 0;
-  padding: 1.25rem 1.5rem 2rem;
-  box-shadow: 0 -4px 24px rgba(0,0,0,.15);
-  display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
-}
-@media (min-width: 640px) {
-  .m-confirm { border-radius: 16px; padding: 1.5rem; }
-}
-
-.m-confirm__drag {
-  width: 36px; height: 4px;
-  border-radius: 2px; background: #e5e7eb;
-  margin-bottom: 0.5rem;
-}
-@media (min-width: 640px) { .m-confirm__drag { display: none; } }
-
-.m-confirm__icon {
-  width: 52px; height: 52px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.4rem;
-  margin-bottom: 0.25rem;
-}
-.m-confirm__icon--amber { background: #fef3c7; color: #d97706; }
-.m-confirm__icon--green { background: #dcfce7; color: #16a34a; }
-
-.m-confirm__title { font-size: 1rem; font-weight: 800; color: #111827; margin: 0; }
-.m-confirm__dia   { font-size: 0.88rem; color: #374151; margin: 0; }
-.m-confirm__desc  { font-size: 0.8rem; color: #9ca3af; margin: 0 0 0.5rem; text-align: center; }
-
-.m-confirm__error {
-  display: flex; align-items: center; gap: 0.4rem;
-  background: #fef2f2; border: 1px solid #fecaca;
-  border-radius: 8px; padding: 0.6rem 0.75rem;
-  font-size: 0.82rem; color: #b91c1c;
-  width: 100%; margin-bottom: 0.25rem;
-}
-
-.m-confirm__btns {
-  display: flex; gap: 0.5rem; width: 100%; margin-top: 0.5rem;
-}
-.m-confirm__btns .btn { flex: 1; justify-content: center; }
-</style>

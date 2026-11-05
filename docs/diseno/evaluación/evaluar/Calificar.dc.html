@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Calificar – un equipo</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F4F6F4; font-family: Inter, system-ui, sans-serif; color: #16201B; display: flex; flex-direction: column; overflow: hidden">
+
+  <header style="background: #FFFFFF; padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid #E3E7E4">
+    <div style="display: flex; align-items: center; gap: 8px; height: 44px">
+      <a href="Main.dc.html" aria-label="Volver a equipos" style="width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-left: -8px">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16201B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+      </a>
+      <span aria-hidden="true" style="width: 36px; height: 36px; border-radius: 10px; background: #B4532A; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px">AR</span>
+      <div style="flex: 1; display: flex; flex-direction: column">
+        <span style="font-size: 17px; font-weight: 700">Arquitectura</span>
+        <span style="font-size: 12px; color: #5B6660">Jueves 5 nov · {{done}} de 29 criterios</span>
+      </div>
+      <span style="display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: #0B6B4B">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>
+        Guardado
+      </span>
+    </div>
+    <div style="height: 6px; background: #E3E7E4; border-radius: 3px; overflow: hidden">
+      <div style="height: 6px; background: #0E7C59; border-radius: 3px; width: {{pct}}%"></div>
+    </div>
+  </header>
+
+  <main style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+    <h2 style="margin: 4px 2px 2px; font-size: 12px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #5B6660">Armado del campamento</h2>
+
+    <sc-for list="{{items}}" as="c" hint-placeholder-count="4">
+      <article style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+          <span style="font-size: 16px; font-weight: 600">{{c.name}}</span>
+          <button aria-label="Qué se evalúa en {{c.name}}" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid #DCE1DD; background: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5B6660" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8h.01"></path></svg>
+          </button>
+        </div>
+        <div role="radiogroup" aria-label="Nota de {{c.name}}" style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px">
+          <sc-for list="{{c.opts}}" as="o" hint-placeholder-count="5">
+            <button role="radio" onClick="{{o.pick}}" style="{{o.style}}">{{o.v}}</button>
+          </sc-for>
+        </div>
+        <span style="font-size: 13px; color: {{c.descColor}}; line-height: 1.4">{{c.desc}}</span>
+      </article>
+    </sc-for>
+  </main>
+
+  <footer style="background: #FFFFFF; border-top: 1px solid #E3E7E4; padding: 12px 16px 22px; display: flex; gap: 10px">
+    <a href="Main.dc.html" style="height: 50px; padding: 0 18px; border-radius: 14px; border: 1px solid #DCE1DD; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600">Anterior</a>
+    <a href="Main.dc.html" style="flex: 1; height: 50px; border-radius: 14px; background: #0E7C59; color: #FFFFFF; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 600">
+      Siguiente: Contabilidad
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+    </a>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { notas: { carpas: 75, cerco: 100, basurero: null, tendedero: null } }; }
+  renderVals() {
+    const self = this;
+    const desc = {
+      100: 'Cumple todos los aspectos, con autonomía y dentro del plazo.',
+      75: 'Cumple lo esencial; omisión menor o requiere un recordatorio.',
+      50: 'Cumple parcialmente y requiere acompañamiento frecuente.',
+      25: 'Avance mínimo o depende de ayuda constante.',
+      0: 'No realiza la acción pese a contar con oportunidad y apoyos.'
+    };
+    const defs = [
+      { id: 'carpas', name: 'Carpas' },
+      { id: 'cerco', name: 'Cerco' },
+      { id: 'basurero', name: 'Basurero' },
+      { id: 'tendedero', name: 'Tendedero' }
+    ];
+    const notas = this.state.notas;
+    let calificados = 0;
+    const items = defs.map(function (d) {
+      const sel = notas[d.id];
+      if (sel !== null && sel !== undefined) calificados++;
+      const opts = [0, 25, 50, 75, 100].map(function (v) {
+        const on = sel === v;
+        return {
+          v: v,
+          pick: function () { const n = Object.assign({}, self.state.notas); n[d.id] = v; self.setState({ notas: n }); },
+          style: 'height: 48px; border-radius: 12px; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; ' +
+            (on ? 'background: #0E7C59; color: #FFFFFF; border: 1px solid #0E7C59;' : 'background: #F4F6F4; color: #16201B; border: 1px solid #DCE1DD;')
+        };
+      });
+      const has = sel !== null && sel !== undefined;
+      return {
+        name: d.name, opts: opts,
+        desc: has ? desc[sel] : 'Pendiente · toca una nota para calificar',
+        descColor: has ? '#16201B' : '#5B6660'
+      };
+    });
+    const done = 13 + calificados;
+    return { items: items, done: done, pct: Math.round(done / 29 * 100) };
+  }
+}
+</script>
+</body>
+</html>

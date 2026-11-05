@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Avance de evaluación – tablet</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 1180px; height: 820px; box-sizing: border-box; background: #F4F6F4; font-family: Inter, system-ui, sans-serif; color: #16201B; display: flex; overflow: hidden">
+
+  <nav aria-label="Menú principal" style="width: 88px; flex-shrink: 0; background: #FFFFFF; border-right: 1px solid #E3E7E4; display: flex; flex-direction: column; align-items: center; padding: 18px 0; gap: 6px">
+    <span aria-hidden="true" style="width: 40px; height: 40px; border-radius: 12px; background: #0E7C59; display: flex; align-items: center; justify-content: center; margin-bottom: 14px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18L12 4 3 20z"></path><path d="M10 20l2-4 2 4"></path></svg>
+    </span>
+    <a href="InicioTablet.dc.html" style="width: 72px; padding: 8px 0; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: #5B6660"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>Inicio</a>
+    <a href="TabletEquipo.dc.html" style="width: 72px; padding: 8px 0; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: #5B6660"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 8-8"></path><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"></path></svg>Evaluar</a>
+    <a href="IncidenciasTablet.dc.html" style="width: 72px; padding: 8px 0; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: #5B6660"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg>Incidencias</a>
+    <a href="#" aria-current="page" style="width: 72px; padding: 8px 0; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: #0B6B4B; background: #E1F3EA"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg>Avance</a>
+    <a href="#" style="width: 72px; padding: 8px 0; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; color: #5B6660"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4"></path><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"></path></svg>Ranking</a>
+    <button aria-label="Mi cuenta" style="margin-top: auto; width: 42px; height: 42px; border-radius: 50%; border: 0; background: #0E7C59; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700">V</button>
+  </nav>
+
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+    <header style="background: #FFFFFF; border-bottom: 1px solid #E3E7E4; padding: 12px 22px; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: center; gap: 12px">
+        <div style="display: flex; flex-direction: column; margin-right: auto">
+          <span style="font-size: 12px; color: #5B6660">Seguimiento</span>
+          <span style="font-size: 18px; font-weight: 700">Avance de evaluación</span>
+        </div>
+        <div role="tablist" aria-label="Día" style="display: flex; gap: 6px">
+          <sc-for list="{{days}}" as="d" hint-placeholder-count="4">
+            <button role="tab" onClick="{{d.pick}}" style="{{d.style}}">{{d.label}}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px">
+        <span role="img" aria-label="{{pct}} por ciento" style="width: 44px; height: 44px; border-radius: 50%; background: {{ring}}; display: flex; align-items: center; justify-content: center; flex-shrink: 0">
+          <span style="width: 35px; height: 35px; border-radius: 50%; background: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700">{{pct}}%</span>
+        </span>
+        <div style="flex: 1; display: flex; flex-direction: column">
+          <span style="font-size: 15px; font-weight: 700">{{done}} de {{total}} observaciones</span>
+          <span style="font-size: 12px; color: #7A4F00; font-weight: 600">{{left}} pendientes</span>
+        </div>
+        <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 12px; background: #E1F3EA; color: #0B6B4B"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #0E7C59"></span>Día abierto</span>
+        <button style="height: 42px; padding: 0 16px; border-radius: 12px; border: 1px solid #16201B; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>Cerrar día</button>
+      </div>
+    </header>
+
+    <main style="flex: 1; min-height: 0; overflow: auto; padding: 14px 18px">
+      <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; overflow: hidden">
+        <div role="table" aria-label="Avance por criterio y equipo" style="font-size: 12px">
+          <div role="row" style="display: grid; grid-template-columns: 210px repeat(12, minmax(0, 1fr)) 56px; border-bottom: 1px solid #E3E7E4">
+            <span role="columnheader" style="padding: 10px 12px; color: #5B6660; font-weight: 600; display: flex; align-items: flex-end">Criterio</span>
+            <sc-for list="{{teams}}" as="t" hint-placeholder-count="12">
+              <span role="columnheader" title="{{t.name}}" style="padding: 8px 0; display: flex; flex-direction: column; align-items: center; gap: 3px">
+                <span style="width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #FFFFFF; background: {{t.color}}">{{t.initials}}</span>
+                <span style="font-size: 10px; font-weight: 600; color: #5B6660">{{t.pct}}%</span>
+              </span>
+            </sc-for>
+            <span role="columnheader" style="padding: 10px 8px; color: #5B6660; font-weight: 600; display: flex; align-items: flex-end; justify-content: flex-end">Av.</span>
+          </div>
+          <sc-for list="{{groups}}" as="g" hint-placeholder-count="5">
+            <div role="rowgroup">
+              <div role="row" style="border-bottom: 1px solid #EEF1EF; background: #FAFBFA">
+                <button onClick="{{g.toggle}}" aria-expanded="{{g.open}}" style="width: 100%; min-height: 40px; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 0; background: transparent; font: inherit; color: #16201B; cursor: pointer; text-align: left">
+                  <span style="{{g.chev}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5B6660" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></span>
+                  <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #3A4540">{{g.name}}</span>
+                  <span style="font-size: 11px; color: #5B6660">{{g.summary}}</span>
+                </button>
+              </div>
+              <sc-if value="{{g.open}}" hint-placeholder-val="{{ true }}">
+                <sc-for list="{{g.rows}}" as="r" hint-placeholder-count="4">
+                  <div role="row" style="display: grid; grid-template-columns: 210px repeat(12, minmax(0, 1fr)) 56px; border-bottom: 1px solid #EEF1EF">
+                    <span role="rowheader" style="padding: 6px 12px; display: flex; flex-direction: column; justify-content: center"><span style="font-size: 12px; font-weight: 500; color: {{r.nameColor}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.name}}</span><span style="font-size: 10px; color: #8A948E">{{r.maxLabel}}</span></span>
+                    <sc-for list="{{r.cells}}" as="c" hint-placeholder-count="12">
+                      <span role="cell" style="padding: 3px 2px"><span style="{{c.style}}">{{c.txt}}</span></span>
+                    </sc-for>
+                    <span role="cell" style="padding: 6px 8px; font-weight: 600; color: {{r.avColor}}; display: flex; align-items: center; justify-content: flex-end">{{r.av}}</span>
+                  </div>
+                </sc-for>
+              </sc-if>
+            </div>
+          </sc-for>
+          <div role="row" style="display: grid; grid-template-columns: 210px repeat(12, minmax(0, 1fr)) 56px; background: #EEF1EF">
+            <span role="rowheader" style="padding: 10px 12px; font-weight: 700">Total del día</span>
+            <sc-for list="{{totals}}" as="x" hint-placeholder-count="12">
+              <span role="cell" style="padding: 10px 0; text-align: center; font-weight: 700">{{x}}</span>
+            </sc-for>
+            <span role="cell"></span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1180,"height":820}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { day: 0, closed: { cer: true, lid: true } }; }
+  renderVals() {
+    const self = this;
+    const T = [
+      ['AD', 'Administración', '#1F6FB2'], ['AR', 'Arquitectura', '#B4532A'], ['CO', 'Contabilidad', '#6B4FA8'],
+      ['DE', 'Derecho', '#2E5E8C'], ['ED', 'Educación', '#8C4A2E'], ['EN', 'Enfermería', '#B23A6B'],
+      ['IA', 'Ing. Ambiental', '#3F7A2A'], ['IS', 'Ing. de Sistemas', '#0E7C59'], ['MH', 'Medicina Humana', '#5A6B12'],
+      ['NH', 'Nutrición Humana', '#9A3E8E'], ['PS', 'Psicología', '#376F8A'], ['TE', 'Teología', '#6B5B2E']
+    ];
+    const G = [
+      { id: 'arm', name: 'Armado del campamento', rows: [['Carpas', 50, 0.9], ['Cerco', 50, 0.7], ['Basurero', 50, -1], ['Portada', 100, 0.3]] },
+      { id: 'coc', name: 'Orden y cocina', rows: [['Orden y limpieza interior', 100, 0.6], ['Orden y limpieza exterior', 100, 0.4], ['Cocina y orden', 100, 0.2]] },
+      { id: 'cer', name: 'Ceremonias y conducta', rows: [['Barras de la mañana', 100, 0.8], ['Respeta el toque de queda', 100, 0.1]] },
+      { id: 'lid', name: 'Liderazgo', rows: [['Involucra a todos', 100, 0.25]] },
+      { id: 'act', name: 'Actividades', rows: [['Programa Apertura y Estelar 1', 400, 0.35]] }
+    ];
+    const h = function (i, j, k) { const x = Math.sin(i * 12.9898 + j * 78.233 + k * 37.719) * 43758.5453; return x - Math.floor(x); };
+    const fmt = function (v) { return String(v).replace('.', ','); };
+    const dayFactor = [1, 0.35, 0, 0][this.state.day];
+    const teamDone = T.map(function () { return 0; }), teamProg = T.map(function () { return 0; }), teamSum = T.map(function () { return 0; });
+    let done = 0, total = 0;
+    const cellBase = 'display: flex; align-items: center; justify-content: center; height: 28px; border-radius: 6px; font-size: 11px; ';
+    const groups = G.map(function (g, gi) {
+      let gd = 0, gt = 0;
+      const rows = g.rows.map(function (r, ri) {
+        const na = r[2] < 0;
+        let rd = 0;
+        const cells = T.map(function (t, ti) {
+          if (na) return { txt: '—', style: cellBase + 'background: #F4F6F4; color: #8A948E;' };
+          teamProg[ti]++; total++; gt++;
+          const ok = h(gi * 10 + ri, ti, self.state.day) < r[2] * dayFactor;
+          if (!ok) return { txt: '', style: cellBase + 'background: #FFF1D6;' };
+          const lv = 1 + Math.floor(h(ri, ti, gi + 3) * 4);
+          const v = r[1] === 400 ? 160 + Math.floor(h(ti, ri, 9) * 12) * 20 : r[1] * lv / 4;
+          rd++; done++; gd++; teamDone[ti]++; teamSum[ti] += v;
+          return { txt: fmt(v), style: cellBase + 'background: #E1F3EA; color: #0B6B4B; font-weight: 700;' };
+        });
+        return { name: r[0], maxLabel: na ? 'no se evalúa hoy' : 'máx. ' + r[1], nameColor: na ? '#8A948E' : '#16201B', cells: cells, av: na ? '—' : rd + '/12', avColor: rd === 12 ? '#0B6B4B' : '#16201B' };
+      });
+      const open = !self.state.closed[g.id];
+      return {
+        name: g.name, rows: rows, open: open, summary: gt ? gd + ' de ' + gt : '',
+        chev: 'display: flex; transform: rotate(' + (open ? 90 : 0) + 'deg);',
+        toggle: function () { const c = Object.assign({}, self.state.closed); c[g.id] = !c[g.id]; self.setState({ closed: c }); }
+      };
+    });
+    const teams = T.map(function (t, ti) { return { initials: t[0], name: t[1], color: t[2], pct: teamProg[ti] ? Math.round(teamDone[ti] / teamProg[ti] * 100) : 0 }; });
+    const pct = total ? Math.round(done / total * 100) : 0;
+    const dl = ['Jue 5 · Hoy', 'Vie 6', 'Sáb 7', 'Dom 8'];
+    const days = dl.map(function (d, i) {
+      const on = self.state.day === i;
+      return { label: d, pick: function () { self.setState({ day: i }); },
+        style: 'height: 38px; padding: 0 12px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; ' + (on ? 'background: #0E7C59; color: #FFFFFF; border: 1px solid #0E7C59;' : 'background: #FFFFFF; color: #16201B; border: 1px solid #DCE1DD;') };
+    });
+    return { days: days, teams: teams, groups: groups, totals: teamSum.map(fmt), done: done, total: total, left: total - done, pct: pct, ring: 'conic-gradient(#0E7C59 ' + pct + '%, #E3E7E4 0)' };
+  }
+}
+</script>
+</body>
+</html>

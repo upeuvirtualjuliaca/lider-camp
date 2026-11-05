@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Nueva incidencia – celular</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F4F6F4; font-family: Inter, system-ui, sans-serif; color: #16201B; display: flex; flex-direction: column; overflow: hidden">
+
+  <header style="background: #FFFFFF; padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid #E3E7E4">
+    <div style="display: flex; align-items: center; gap: 8px; min-height: 44px">
+      <a href="IncidenciasMovil.dc.html" aria-label="Cerrar" style="width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-left: -8px">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16201B" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+      </a>
+      <div style="flex: 1; display: flex; flex-direction: column">
+        <span style="font-size: 17px; font-weight: 700">Nueva incidencia</span>
+        <span style="font-size: 12px; color: #5B6660">Paso {{step}} de 4 · {{stepName}}</span>
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px">
+      <sc-for list="{{bars}}" as="b" hint-placeholder-count="4">
+        <span style="height: 4px; border-radius: 2px; background: {{b.c}}"></span>
+      </sc-for>
+    </div>
+  </header>
+
+  <main style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+    <sc-if value="{{s1}}" hint-placeholder-val="{{ true }}">
+      <h2 style="margin: 0; font-size: 18px; font-weight: 700">¿Qué tipo de incidencia?</h2>
+      <div role="radiogroup" aria-label="Tipo" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <button role="radio" onClick="{{pickBonus}}" style="{{bonusStyle}}"><span style="font-size: 16px; font-weight: 700">Bonus</span><span style="font-size: 12px; color: #5B6660">Suma puntos</span></button>
+        <button role="radio" onClick="{{pickDem}}" style="{{demStyle}}"><span style="font-size: 16px; font-weight: 700">Demérito</span><span style="font-size: 12px; color: #5B6660">Resta puntos</span></button>
+      </div>
+      <span style="margin-top: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #5B6660">Código</span>
+      <sc-for list="{{codes}}" as="c" hint-placeholder-count="2">
+        <button role="radio" onClick="{{c.pick}}" style="{{c.style}}">
+          <span style="{{c.badge}}">{{c.code}}</span>
+          <span style="flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 2px">
+            <span style="font-size: 14px; font-weight: 600; text-align: left">{{c.name}}</span>
+            <span style="font-size: 12px; color: #5B6660; text-align: left">{{c.help}}</span>
+          </span>
+          <span style="font-size: 14px; font-weight: 700; color: {{c.ptsColor}}">{{c.pts}}</span>
+        </button>
+      </sc-for>
+    </sc-if>
+
+    <sc-if value="{{s2}}" hint-placeholder-val="{{ false }}">
+      <h2 style="margin: 0; font-size: 18px; font-weight: 700">¿Qué equipo?</h2>
+      <div role="radiogroup" aria-label="Equipo" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+        <sc-for list="{{teams}}" as="t" hint-placeholder-count="8">
+          <button role="radio" onClick="{{t.pick}}" style="{{t.style}}">
+            <span aria-hidden="true" style="width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #FFFFFF; background: {{t.color}}">{{t.initials}}</span>
+            <span style="font-size: 13px; font-weight: 600; text-align: left">{{t.name}}</span>
+          </button>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{s3}}" hint-placeholder-val="{{ false }}">
+      <h2 style="margin: 0; font-size: 18px; font-weight: 700">¿Qué pasó?</h2>
+      <label style="display: flex; flex-direction: column; gap: 6px">
+        <span style="font-size: 13px; font-weight: 600">Descripción del hecho</span>
+        <textarea placeholder="Qué se observó, dónde y quiénes participaron…" style="min-height: 110px; border: 1px solid #DCE1DD; border-radius: 12px; padding: 12px; font: inherit; font-size: 15px; resize: vertical"></textarea>
+        <span style="font-size: 12px; color: #5B6660">Mínimo 10 caracteres</span>
+      </label>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <label style="display: flex; flex-direction: column; gap: 6px"><span style="font-size: 13px; font-weight: 600">Fecha</span><input type="text" value="Jue 5 nov" style="height: 46px; border: 1px solid #DCE1DD; border-radius: 12px; padding: 0 12px; font: inherit; font-size: 15px"></label>
+        <label style="display: flex; flex-direction: column; gap: 6px"><span style="font-size: 13px; font-weight: 600">Hora</span><input type="text" value="14:38" style="height: 46px; border: 1px solid #DCE1DD; border-radius: 12px; padding: 0 12px; font: inherit; font-size: 15px"></label>
+      </div>
+      <button style="min-height: 64px; border: 1px dashed #B9C2BC; border-radius: 12px; background: #FFFFFF; display: flex; align-items: center; justify-content: center; gap: 10px; font: inherit; font-size: 15px; font-weight: 600; color: #0B6B4B">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+        Tomar foto de evidencia
+      </button>
+      <div style="display: flex; justify-content: space-between; align-items: center; background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 12px; padding: 12px 14px">
+        <span style="font-size: 13px; color: #5B6660">Puntos según el código {{curCode}}</span>
+        <span style="font-size: 18px; font-weight: 700; color: {{curColor}}">{{curPts}}</span>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{s4}}" hint-placeholder-val="{{ false }}">
+      <h2 style="margin: 0; font-size: 18px; font-weight: 700">Revisa y registra</h2>
+      <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; overflow: hidden">
+        <div style="display: flex; justify-content: space-between; gap: 12px; padding: 14px; border-bottom: 1px solid #EEF1EF; font-size: 14px"><span style="color: #5B6660">Tipo</span><span style="font-weight: 600">{{sumTipo}}</span></div>
+        <div style="display: flex; justify-content: space-between; gap: 12px; padding: 14px; border-bottom: 1px solid #EEF1EF; font-size: 14px"><span style="color: #5B6660">Código</span><span style="font-weight: 600; text-align: right">{{curCode}} · {{curName}}</span></div>
+        <div style="display: flex; justify-content: space-between; gap: 12px; padding: 14px; border-bottom: 1px solid #EEF1EF; font-size: 14px"><span style="color: #5B6660">Equipo</span><span style="font-weight: 600">{{teamName}}</span></div>
+        <div style="display: flex; justify-content: space-between; gap: 12px; padding: 14px; border-bottom: 1px solid #EEF1EF; font-size: 14px"><span style="color: #5B6660">Fecha y hora</span><span style="font-weight: 600">Jue 5 nov · 14:38</span></div>
+        <div style="display: flex; justify-content: space-between; gap: 12px; padding: 14px; font-size: 14px"><span style="color: #5B6660">Puntos</span><span style="font-size: 18px; font-weight: 700; color: {{curColor}}">{{curPts}}</span></div>
+      </div>
+      <span style="align-self: flex-start; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 8px; background: #EEF0EE; color: #4A544F">Quedará Registrada, pendiente de validación</span>
+    </sc-if>
+  </main>
+
+  <footer style="background: #FFFFFF; border-top: 1px solid #E3E7E4; padding: 12px 16px 22px; display: flex; gap: 10px">
+    <button onClick="{{back}}" style="height: 50px; padding: 0 18px; border-radius: 14px; border: 1px solid #DCE1DD; background: #FFFFFF; font: inherit; font-size: 15px; font-weight: 600; color: #16201B; cursor: pointer">Anterior</button>
+    <button onClick="{{next}}" style="flex: 1; height: 50px; border-radius: 14px; border: 0; background: #0E7C59; color: #FFFFFF; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer">{{nextLabel}}</button>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { step: 1, tipo: 'bonus', code: 'B1', team: 'nh' }; }
+  renderVals() {
+    const self = this;
+    const all = {
+      bonus: [
+        { code: 'B1', name: 'Servicio extraordinario', help: 'Usados 1 de 2 por este equipo', pts: '+25' },
+        { code: 'B2', name: 'Cooperación entre equipos', help: 'Requiere confirmación del equipo apoyado', pts: '+25' }
+      ],
+      demerito: [
+        { code: 'D1', name: 'Ruido tras advertencia', help: 'Requiere advertencia previa registrada', pts: '−10' },
+        { code: 'D2', name: 'Uso de recursos ajenos', help: 'Recursos de otro equipo sin permiso', pts: '−20' },
+        { code: 'D3', name: 'Burla, insulto o exclusión', help: 'Conducta ofensiva', pts: '−30' },
+        { code: 'D4', name: 'Instrucción de seguridad', help: 'Pone en riesgo a personas', pts: '−50' },
+        { code: 'D5', name: 'Alterar evidencias o puntajes', help: 'Manipulación de registros', pts: '−100' },
+        { code: 'D6', name: 'Bebidas prohibidas', help: 'Por persona · implica expulsión', pts: '−500 c/u' }
+      ]
+    };
+    const b = this.state.tipo === 'bonus';
+    const card = function (on, isB) {
+      return 'min-height: 84px; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 14px; border-radius: 14px; font: inherit; color: #16201B; text-align: left; cursor: pointer; ' +
+        (on ? (isB ? 'background: #E1F3EA; border: 2px solid #0E7C59;' : 'background: #FDECEC; border: 2px solid #A3261F;') : 'background: #FFFFFF; border: 2px solid #E3E7E4;');
+    };
+    const codes = all[this.state.tipo].map(function (c) {
+      const on = self.state.code === c.code;
+      return Object.assign({}, c, {
+        pick: function () { self.setState({ code: c.code }); },
+        badge: 'width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; ' + (b ? 'background: #E1F3EA; color: #0B6B4B;' : 'background: #FDECEC; color: #A3261F;'),
+        ptsColor: b ? '#0B6B4B' : '#A3261F',
+        style: 'display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 12px; border-radius: 12px; font: inherit; color: #16201B; cursor: pointer; ' +
+          (on ? 'background: #FFFFFF; border: 2px solid #16201B;' : 'background: #FFFFFF; border: 2px solid #E3E7E4;')
+      });
+    });
+    const cur = all[this.state.tipo].filter(function (c) { return c.code === self.state.code; })[0] || all[this.state.tipo][0];
+    const tdefs = [
+      { id: 'ad', name: 'Administración', initials: 'AD', color: '#1F6FB2' }, { id: 'ar', name: 'Arquitectura', initials: 'AR', color: '#B4532A' },
+      { id: 'co', name: 'Contabilidad', initials: 'CO', color: '#6B4FA8' }, { id: 'de', name: 'Derecho', initials: 'DE', color: '#2E5E8C' },
+      { id: 'ed', name: 'Educación', initials: 'ED', color: '#8C4A2E' }, { id: 'en', name: 'Enfermería', initials: 'EN', color: '#B23A6B' },
+      { id: 'is', name: 'Ing. de Sistemas', initials: 'IS', color: '#0E7C59' }, { id: 'nh', name: 'Nutrición Humana', initials: 'NH', color: '#5A6B12' }
+    ];
+    let teamName = '';
+    const teams = tdefs.map(function (t) {
+      const on = self.state.team === t.id;
+      if (on) teamName = t.name;
+      return Object.assign({}, t, {
+        pick: function () { self.setState({ team: t.id }); },
+        style: 'display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 10px; border-radius: 12px; font: inherit; color: #16201B; cursor: pointer; ' +
+          (on ? 'background: #E1F3EA; border: 2px solid #0E7C59;' : 'background: #FFFFFF; border: 2px solid #E3E7E4;')
+      });
+    });
+    const s = this.state.step;
+    const names = ['', 'Tipo y código', 'Equipo', 'Detalles', 'Confirmar'];
+    return {
+      step: s, stepName: names[s],
+      bars: [1, 2, 3, 4].map(function (i) { return { c: i <= s ? '#0E7C59' : '#E3E7E4' }; }),
+      s1: s === 1, s2: s === 2, s3: s === 3, s4: s === 4,
+      codes: codes, teams: teams, teamName: teamName,
+      bonusStyle: card(b, true), demStyle: card(!b, false),
+      pickBonus: function () { self.setState({ tipo: 'bonus', code: 'B1' }); },
+      pickDem: function () { self.setState({ tipo: 'demerito', code: 'D1' }); },
+      curCode: cur.code, curName: cur.name, curPts: cur.pts, curColor: b ? '#0B6B4B' : '#A3261F',
+      sumTipo: b ? 'Bonus' : 'Demérito',
+      nextLabel: s === 4 ? 'Registrar incidencia' : 'Siguiente',
+      next: function () { self.setState({ step: Math.min(4, s + 1) }); },
+      back: function () { self.setState({ step: Math.max(1, s - 1) }); }
+    };
+  }
+}
+</script>
+</body>
+</html>
