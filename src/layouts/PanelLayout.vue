@@ -8,9 +8,11 @@ import BottomNav              from '@/components/ui/BottomNav.vue'
 import NavIcon                from '@/components/ui/NavIcon.vue'
 import { initOfflineQueue }   from '@/lib/offlineQueue'
 import { precalentarCache }   from '@/lib/precalentarCache'
+import { useRevisionesStore } from '@/modules/revisiones/store'
 
 const session   = useSessionStore()
 const campStore = useCampamentoStore()
+const revStore  = useRevisionesStore()
 const router    = useRouter()
 const route     = useRoute()
 
@@ -20,6 +22,11 @@ onMounted(async () => {
   await campStore.cargar()
   initOfflineQueue()
   if (campStore.selectedId) precalentarCache(campStore.selectedId)
+  if (session.rol === 'admin') revStore.cargarConteo(campStore.selectedId)
+})
+
+watch(() => campStore.selectedId, (id) => {
+  if (session.rol === 'admin') revStore.cargarConteo(id)
 })
 
 const iniciales = computed(() => {
@@ -217,6 +224,10 @@ function navegar(to: string)  { menuAbierto.value = false; router.push(to) }
                 >
                   <NavIcon :key-name="item.iconKey" />
                   {{ item.label }}
+                  <span
+                    v-if="item.to === '/panel/revisiones' && revStore.cntPendiente > 0"
+                    class="ml-auto text-[11px] font-bold px-[7px] py-0.5 rounded-[9px] bg-[#0E7C59] text-white leading-none"
+                  >{{ revStore.cntPendiente }}</span>
                 </button>
               </div>
             </div>
@@ -372,6 +383,10 @@ function navegar(to: string)  { menuAbierto.value = false; router.push(to) }
             >
               <NavIcon :key-name="item.iconKey" />
               {{ item.label }}
+              <span
+                v-if="item.to === '/panel/revisiones' && revStore.cntPendiente > 0"
+                class="ml-auto text-[11px] font-bold px-[7px] py-0.5 rounded-[9px] bg-[#0E7C59] text-white leading-none"
+              >{{ revStore.cntPendiente }}</span>
             </RouterLink>
           </div>
         </div>

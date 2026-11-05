@@ -176,8 +176,8 @@ const router = createRouter({
         {
           path: 'revisiones',
           name: 'revisiones',
-          component: () => import('@/modules/incidencias/views/BandejaView.vue'),
-          meta: { requiresAuth: true, roles: ['admin'] },
+          component: () => import('@/modules/revisiones/views/RevisionesView.vue'),
+          meta: { requiresAuth: true, roles: ['admin'], title: 'Revisiones', section: 'Administración' },
         },
         {
           path: 'resultados',

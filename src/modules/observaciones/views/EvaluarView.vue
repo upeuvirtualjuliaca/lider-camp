@@ -468,6 +468,17 @@ function confirmarMotivo() {
   dialogMotivo.value   = false
 }
 
+async function guardarComentario(
+  filasMap: Map<string, FilaEstado>,
+  clave: string,
+  equipo_id: string,
+  programacion_id: string,
+) {
+  const fila = filasMap.get(clave)
+  if (!fila || fila.puntaje === null) return
+  await guardarPuntaje(filasMap, clave, fila.puntaje, equipo_id, programacion_id)
+}
+
 // ── Progreso ──────────────────────────────────────────────────────────────────
 function progresoEquipo(equipo: Equipo): { calificados: number; total: number } {
   if (equipoSeleccionado.value?.id === equipo.id) {
@@ -843,6 +854,7 @@ function pctBar(c: number, t: number) {
                             class="w-full mt-1.5 text-[14px] rounded-xl"
                             placeholder="Comentario interno…"
                             :disabled="diaCerrado"
+                            @blur="guardarComentario(filasEquipo, prog.id, equipoSeleccionado!.id, prog.id)"
                           />
                         </div>
                       </article>
@@ -1036,6 +1048,7 @@ function pctBar(c: number, t: number) {
                       class="w-full text-[14px] rounded-xl"
                       placeholder="Comentario interno…"
                       :disabled="diaCerrado"
+                      @blur="guardarComentario(filasCriterio, equipo.id, equipo.id, criterioSeleccionado!.id)"
                     />
                   </article>
                 </div>
