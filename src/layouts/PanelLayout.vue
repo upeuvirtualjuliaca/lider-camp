@@ -5,6 +5,7 @@ import { useSessionStore }    from '@/modules/auth/store'
 import { useCampamentoStore } from '@/stores/campamento'
 import SyncStatus             from '@/components/ui/SyncStatus.vue'
 import { initOfflineQueue }   from '@/lib/offlineQueue'
+import { precalentarCache }   from '@/lib/precalentarCache'
 
 const session   = useSessionStore()
 const campStore = useCampamentoStore()
@@ -17,6 +18,10 @@ const sidebarCollapsed = ref(false)
 onMounted(async () => {
   await campStore.cargar()
   initOfflineQueue()
+  // Precalentar caché en background (sin bloquear el arranque)
+  if (campStore.selectedId) {
+    precalentarCache(campStore.selectedId)
+  }
 })
 
 const iniciales = computed(() => {
