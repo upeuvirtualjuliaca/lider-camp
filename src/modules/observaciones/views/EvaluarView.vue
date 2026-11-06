@@ -137,6 +137,7 @@ const obsByCriterio = ref<Map<string, ObservacionConEquipo>>(new Map())
 
 const filasEquipo   = ref<Map<string, FilaEstado>>(new Map())
 const filasCriterio = ref<Map<string, FilaEstado>>(new Map())
+const progresoCriterioCache = ref<Record<string, number>>({})
 
 const tabActivo = ref<'equipos' | 'criterios'>('equipos')
 
@@ -332,6 +333,7 @@ async function seleccionarMomento(m: string) {
   obsByCriterio.value = new Map()
   filasEquipo.value   = new Map()
   filasCriterio.value = new Map()
+  progresoCriterioCache.value = {}
   await cargarProgramacionDia()
 }
 
@@ -343,14 +345,20 @@ async function cargarProgramacionDia() {
   if (err || !data) { error.value = err ?? 'Error al cargar programación'; return }
   programacionDia.value = data
 
-  const [ptsResult, lidProgResult, lidResumenResult] = await Promise.all([
+  const progIds = data.filter((p) => p.estado === 'programado').map((p) => p.id)
+
+  const [ptsResult, lidProgResult, lidResumenResult, conteoResult] = await Promise.all([
     supabase_safe(() => observacionesService.getPuntajeEquipoDia(momentoActivo.value, campId)),
     supabase_safe(() => programacionLiderazgoService.getPorDia(momentoActivo.value, campId)),
     supabase_safe(() => evaluacionesService.getResumenDia(momentoActivo.value, campId)),
+    session.user && progIds.length
+      ? supabase_safe(() => observacionesService.getConteoPorCriterios(progIds, session.user!.id))
+      : Promise.resolve({ data: {} as Record<string, number>, error: null }),
   ])
   if (ptsResult.data)       puntajesDia.value        = ptsResult.data
   programacionLiderazgo.value = lidProgResult.data
   liderazgoResumenDia.value   = lidResumenResult.data ?? []
+  if (conteoResult.data)    progresoCriterioCache.value = conteoResult.data
 }
 
 async function supabase_safe<T>(fn: () => Promise<T>): Promise<{ data: T; error: null } | { data: null; error: string }> {
@@ -384,6 +392,13 @@ async function seleccionarEquipo(equipo: Equipo) {
 
 // ── Vista por criterio ────────────────────────────────────────────────────────
 async function seleccionarCriterio(prog: ProgramacionConCriterio) {
+  // Guardar progreso del criterio anterior en caché antes de salir
+  if (criterioSeleccionado.value && filasCriterio.value.size > 0) {
+    let c = 0
+    for (const [, f] of filasCriterio.value) if (f.puntaje !== null) c++
+    progresoCriterioCache.value[criterioSeleccionado.value.id] = c
+  }
+
   criterioSeleccionado.value = prog
   equipoSeleccionado.value   = null
   modoLiderazgoCriterio.value = false
@@ -404,6 +419,10 @@ async function seleccionarCriterio(prog: ProgramacionConCriterio) {
       comentarioAbierto: false,
     })
   }
+  // Cachear el progreso recién cargado
+  let calificados = 0
+  for (const [, f] of filasCriterio.value) if (f.puntaje !== null) calificados++
+  progresoCriterioCache.value[prog.id] = calificados
 }
 
 // ── Guardado de puntaje ───────────────────────────────────────────────────────
@@ -497,7 +516,7 @@ function progresoCriterio(prog: ProgramacionConCriterio): { calificados: number;
     for (const [, f] of filasCriterio.value) if (f.puntaje !== null) c++
     return { calificados: c, total: equipos.value.length }
   }
-  return { calificados: 0, total: equipos.value.length }
+  return { calificados: progresoCriterioCache.value[prog.id] ?? 0, total: equipos.value.length }
 }
 
 const progresoCriterioLiderazgo = computed(() => {

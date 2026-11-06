@@ -196,6 +196,24 @@ export const observacionesService = {
     if (error) throw error
     return data ?? []
   },
+
+  async getConteoPorCriterios(
+    programacion_ids: string[],
+    evaluador_id: string,
+  ): Promise<Record<string, number>> {
+    if (!programacion_ids.length) return {}
+    const { data, error } = await supabase
+      .from('observaciones')
+      .select('programacion_id')
+      .eq('evaluador_id', evaluador_id)
+      .in('programacion_id', programacion_ids)
+    if (error) throw error
+    const counts: Record<string, number> = {}
+    for (const obs of data ?? []) {
+      counts[obs.programacion_id] = (counts[obs.programacion_id] ?? 0) + 1
+    }
+    return counts
+  },
 }
 
 // ── programacionRubricaService ───────────────────────────────────────────────
