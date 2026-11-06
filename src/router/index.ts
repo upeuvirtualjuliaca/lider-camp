@@ -123,7 +123,7 @@ const router = createRouter({
           path: 'avance',
           name: 'avance',
           component: () => import('@/modules/observaciones/views/AvanceView.vue'),
-          meta: { requiresAuth: true, roles: ['admin'] },
+          meta: { requiresAuth: true, roles: ['admin', 'evaluador'] },
         },
         {
           path: 'ranking',

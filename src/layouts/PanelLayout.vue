@@ -66,7 +66,7 @@ const sections: NavSection[] = [
   {
     id: 'seguimiento', label: 'Seguimiento',
     items: [
-      { label: 'Avance',  iconKey: 'chart',   to: '/panel/avance',  roles: ['admin'] },
+      { label: 'Avance',  iconKey: 'chart',   to: '/panel/avance',  roles: ['admin', 'evaluador'] },
       { label: 'Ranking', iconKey: 'trophy',  to: '/panel/ranking', roles: ['admin', 'evaluador'] },
     ],
   },
@@ -87,7 +87,7 @@ const sections: NavSection[] = [
       { label: 'Revisiones',  iconKey: 'edit',     to: '/panel/revisiones', roles: ['admin'] },
       { label: 'Publicación', iconKey: 'flagfill', to: '/panel/resultados', roles: ['admin'] },
       { label: 'Auditoría',   iconKey: 'history',  to: '/panel/auditoria',  roles: ['admin'] },
-      { label: 'Reportes',    iconKey: 'download', to: '/panel/reportes',   roles: ['admin'] },
+      { label: 'Reportes',    iconKey: 'download', to: '/panel/reportes',   roles: ['admin', 'evaluador'] },
       { label: 'Usuarios',    iconKey: 'idcard',   to: '/panel/usuarios',   roles: ['admin'] },
     ],
   },
