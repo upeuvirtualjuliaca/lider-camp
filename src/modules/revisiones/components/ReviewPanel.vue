@@ -7,8 +7,7 @@ const props = defineProps<{
   cargando: boolean
   error: string
   detUrls: Record<string, string>
-  checks: boolean[]
-  descargo: string
+  comentarioAdmin: string
   accionando: boolean
   accionError: string
   pendPos: { pos: number; total: number } | null
@@ -17,19 +16,11 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'update:checks': [val: boolean[]]
-  'update:descargo': [val: string]
+  'update:comentarioAdmin': [val: string]
   validar: []
   abrirRechazo: []
   reabrir: []
 }>()
-
-const CHECK_TEXTS = [
-  'Se escuchó al equipo',
-  'Es un solo código por episodio',
-  'No se descontó antes en otro ítem',
-  'Es atribuible al equipo',
-]
 
 const ESTADO_CFG: Record<string, { label: string; cls: string }> = {
   registrado: { label: 'Registrada',  cls: 'bg-[#EEF0EE] text-[#4A544F]' },
@@ -38,17 +29,8 @@ const ESTADO_CFG: Record<string, { label: string; cls: string }> = {
   rechazado:  { label: 'Rechazada',   cls: 'bg-[#FDECEC] text-[#A3261F]' },
 }
 
-const checksOk = computed(() => props.checks.every(Boolean))
-const nChecks  = computed(() => props.checks.filter(Boolean).length)
-
 const isPending  = computed(() => props.detalle?.estado === 'registrado' || props.detalle?.estado === 'descargo')
 const isResolved = computed(() => props.detalle?.estado === 'validado'   || props.detalle?.estado === 'rechazado')
-
-function toggleCheck(i: number) {
-  const c = [...props.checks]
-  c[i] = !c[i]
-  emit('update:checks', c)
-}
 
 function fmt(fecha: string, hora: string | null): string {
   const DIAS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -121,7 +103,7 @@ function fmtDate(iso: string): string {
           </div>
           <div class="bg-[#F4F6F4] rounded-[10px] px-2.5 py-2">
             <div class="text-[11px] text-[#5B6660] mb-0.5">Registró</div>
-            <div class="text-[13px] font-semibold truncate">{{ (detalle as any).evaluador_nombre ?? '—' }}</div>
+            <div class="text-[13px] font-semibold truncate">{{ detalle.evaluador_nombre ?? '—' }}</div>
           </div>
         </div>
 
@@ -155,38 +137,18 @@ function fmtDate(iso: string): string {
         </div>
       </section>
 
-      <!-- ── PENDING: descargo + checklist ── -->
+      <!-- ── PENDING: admin comment ── -->
       <template v-if="isPending">
-        <!-- Descargo textarea -->
         <label class="flex flex-col gap-1.5">
-          <span class="text-[12px] font-bold uppercase tracking-[0.6px] text-[#5B6660]">Descargo del equipo</span>
+          <span class="text-[12px] font-bold uppercase tracking-[0.6px] text-[#5B6660]">Comentario del administrador</span>
           <textarea
-            :value="descargo"
-            @input="emit('update:descargo', ($event.target as HTMLTextAreaElement).value)"
-            placeholder="Qué dijo el equipo al ser escuchado…"
+            :value="comentarioAdmin"
+            @input="emit('update:comentarioAdmin', ($event.target as HTMLTextAreaElement).value)"
+            placeholder="Observaciones o justificación para aplicar esta incidencia…"
             class="min-h-[72px] border border-[#DCE1DD] rounded-xl px-3 py-2.5 text-[15px] resize-y bg-white outline-none focus:border-[#0E7C59] focus:ring-2 focus:ring-[#0E7C59]/20"
             style="font-family: inherit"
           />
         </label>
-
-        <!-- Checklist -->
-        <fieldset class="border border-[#E3E7E4] bg-white rounded-2xl px-3.5 pb-2.5 m-0">
-          <legend class="px-1.5 text-[12px] font-bold text-[#5B6660]">Antes de validar</legend>
-          <div class="grid md:grid-cols-2 gap-0">
-            <label
-              v-for="(text, i) in CHECK_TEXTS" :key="i"
-              class="flex items-center gap-3 min-h-[44px] text-[14px] border-b border-[#EEF1EF] last:border-0 cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                :checked="checks[i]"
-                @change="toggleCheck(i)"
-                class="w-5 h-5 rounded accent-[#0E7C59] flex-shrink-0"
-              />
-              {{ text }}
-            </label>
-          </div>
-        </fieldset>
 
         <!-- Action error -->
         <p v-if="accionError" class="text-[13px] text-[#A3261F] px-1">{{ accionError }}</p>
@@ -240,15 +202,11 @@ function fmtDate(iso: string): string {
           @click="emit('abrirRechazo')"
         >Rechazar…</button>
         <button
-          class="flex-[2] h-12 rounded-[14px] border-0 text-[15px] font-semibold text-white transition-colors disabled:opacity-50"
-          :class="checksOk ? 'bg-[#0E7C59] hover:bg-[#0B6B4B]' : 'bg-[#9BCFB5] cursor-not-allowed'"
-          :disabled="!checksOk || accionando"
+          class="flex-[2] h-12 rounded-[14px] border-0 bg-[#0E7C59] hover:bg-[#0B6B4B] text-[15px] font-semibold text-white transition-colors disabled:opacity-50"
+          :disabled="accionando"
           @click="emit('validar')"
         >Validar</button>
       </div>
-      <p class="text-[12px] text-center text-[#5B6660]">
-        {{ checksOk ? 'Todo verificado. Puedes validar.' : `Verificaciones: ${nChecks} de 4` }}
-      </p>
     </div>
 
   </template>

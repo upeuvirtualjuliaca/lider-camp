@@ -16,6 +16,7 @@ export interface IncidenciaDetalle extends Incidencia {
   integrantes: IncidenciaIntegrante[]
   evidencias: IncidenciaEvidencia[]
   codigo_info: IncidenciaCodigo | null
+  evaluador_nombre: string | null
 }
 
 export interface FiltrosIncidencia {
@@ -104,7 +105,8 @@ export const incidenciasService = {
         *,
         integrantes:incidencia_integrantes(*),
         evidencias:incidencia_evidencias(*),
-        codigo_info:incidencia_codigos!incidencias_codigo_fkey(*)
+        codigo_info:incidencia_codigos!incidencias_codigo_fkey(*),
+        evaluador:perfiles!incidencias_registrado_por_fkey(nombre_completo)
       `)
       .eq('id', id)
       .maybeSingle()
@@ -115,6 +117,7 @@ export const incidenciasService = {
       integrantes: (data as any).integrantes ?? [],
       evidencias: (data as any).evidencias ?? [],
       codigo_info: (data as any).codigo_info ?? null,
+      evaluador_nombre: (data as any).evaluador?.nombre_completo ?? null,
     }
   },
 
@@ -154,7 +157,7 @@ export const incidenciasService = {
     return data
   },
 
-  async validar(id: string, motivo: string): Promise<Incidencia> {
+  async validar(id: string, motivo: string | null): Promise<Incidencia> {
     const { data, error } = await supabase
       .from('incidencias')
       .update({ estado: 'validado', motivo_resolucion: motivo })

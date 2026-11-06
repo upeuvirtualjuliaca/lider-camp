@@ -304,6 +304,15 @@ export const tiposCalculoService = {
   },
 }
 
+export interface PublicoActividad {
+  id: string
+  campamento_id: string
+  momento: string
+  hora_inicio: string | null
+  nombre: string
+  lugar: string | null
+}
+
 export const publicoService = {
   async getCalendario(): Promise<PublicoCalendario[]> {
     const { data, error } = await supabase
@@ -340,6 +349,17 @@ export const publicoService = {
       .order('edicion', { ascending: false })
     if (error) throw error
     return data ?? []
+  },
+
+  async getActividades(campamentoId: string): Promise<PublicoActividad[]> {
+    const { data, error } = await (supabase as any)
+      .from('publico_actividades')
+      .select('id,campamento_id,momento,hora_inicio,nombre,lugar')
+      .eq('campamento_id', campamentoId)
+      .order('momento')
+      .order('hora_inicio')
+    if (error) throw error
+    return (data ?? []) as PublicoActividad[]
   },
 
   async getCampamentoActivo(): Promise<PublicoCampamento | null> {

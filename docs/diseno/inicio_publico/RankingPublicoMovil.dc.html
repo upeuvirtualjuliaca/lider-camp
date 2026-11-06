@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Ranking oficial – público – celular</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F4F6F4; font-family: Inter, system-ui, sans-serif; color: #16201B; display: flex; flex-direction: column; overflow: hidden">
+
+  <header style="background: #FFFFFF; border-bottom: 1px solid #E3E7E4; height: 60px; padding: 0 8px; display: flex; align-items: center; gap: 4px; flex-shrink: 0">
+    <a href="InicioPublicoMovil.dc.html" aria-label="Volver al inicio" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16201B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+    </a>
+    <span style="flex: 1; font-size: 17px; font-weight: 800">Ranking oficial</span>
+    <button aria-label="Actualizar" style="width: 44px; height: 44px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5B6660" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"></path></svg>
+    </button>
+  </header>
+
+  <main style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <span style="font-size: 13px; color: #5B6660">Publicado hasta el <strong style="color: #16201B">jueves 5</strong> · 08:51</span>
+      <div role="tablist" aria-label="Periodo" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 4px; background: #E9EDEA; border-radius: 12px">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="2">
+          <button role="tab" onClick="{{t.pick}}" style="{{t.style}}">{{t.label}}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <sc-if value="{{isTotal}}" hint-placeholder-val="{{ false }}">
+      <section style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 18px; padding: 24px 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center">
+        <span aria-hidden="true" style="width: 56px; height: 56px; border-radius: 16px; background: #F6E3A3; display: flex; align-items: center; justify-content: center">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8A6410" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4"></path><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"></path></svg>
+        </span>
+        <span style="font-size: 18px; font-weight: 800">El ganador se revela al cierre</span>
+        <span style="font-size: 14px; line-height: 1.5; color: #5B6660">El total y las medallas se publican el domingo 8. Mira cómo va tu escuela día a día.</span>
+        <button onClick="{{goDay}}" style="width: 100%; height: 48px; border-radius: 12px; border: 0; background: #0E7C59; color: #FFFFFF; font: inherit; font-size: 15px; font-weight: 600">Ver el jueves</button>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{isDay}}" hint-placeholder-val="{{ true }}">
+      <section aria-label="Podio" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end">
+        <sc-for list="{{podium}}" as="p" hint-placeholder-count="3">
+          <div style="{{p.card}}">
+            <span style="{{p.posStyle}}">{{p.posLabel}}</span>
+            <span aria-hidden="true" style="width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #FFFFFF; background: {{p.color}}">{{p.initials}}</span>
+            <span style="font-size: 12px; font-weight: 600; text-align: center; line-height: 1.25">{{p.name}}</span>
+            <span style="font-size: 19px; font-weight: 800">{{p.pts}}</span>
+          </div>
+        </sc-for>
+      </section>
+      <ol style="list-style: none; margin: 0; padding: 0; background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; overflow: hidden">
+        <sc-for list="{{rows}}" as="r" hint-placeholder-count="12">
+          <li style="border-bottom: 1px solid #EEF1EF">
+            <a href="#" style="display: flex; align-items: center; gap: 12px; padding: 0 14px; min-height: 56px">
+              <span style="{{r.posStyle}}">{{r.posLabel}}</span>
+              <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px; color: #FFFFFF; background: {{r.color}}; flex-shrink: 0">{{r.initials}}</span>
+              <span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 600; line-height: 1.25">{{r.name}}</span>
+              <span style="font-size: 16px; font-weight: 800">{{r.pts}}</span>
+            </a>
+          </li>
+        </sc-for>
+      </ol>
+      <p style="margin: 0; font-size: 12px; color: #5B6660; text-align: center">Puntos sobre 1000. Los empates comparten posición (=).</p>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { tab: 1 }; }
+  renderVals() {
+    const self = this;
+    const T = [
+      ['IA', 'Ing. Ambiental', '#3F7A2A', 812], ['AD', 'Administración', '#1F6FB2', 798], ['DE', 'Derecho', '#2E5E8C', 790],
+      ['IA', 'Ing. de Industrias Alimentarias', '#B4532A', 790], ['IS', 'Ing. de Sistemas', '#0E7C59', 776], ['EN', 'Enfermería', '#B23A6B', 764],
+      ['ED', 'Educación', '#8C4A2E', 751], ['NH', 'Nutrición Humana', '#9A3E8E', 743], ['CO', 'Contabilidad', '#6B4FA8', 730],
+      ['MH', 'Medicina Humana', '#5A6B12', 712], ['PS', 'Psicología', '#376F8A', 690], ['TE', 'Teología', '#6B5B2E', 671]
+    ];
+    let prev = null, pos = 0;
+    const rows = T.map(function (t, i) {
+      if (t[3] !== prev) { pos = i + 1; prev = t[3]; }
+      const tie = T.filter(function (x) { return x[3] === t[3]; }).length > 1;
+      return { initials: t[0], name: t[1], color: t[2], pts: t[3], posLabel: pos + '°' + (tie ? '=' : ''),
+        posStyle: 'width: 32px; font-size: 15px; font-weight: 800; color: ' + (pos <= 3 ? '#16201B' : '#5B6660') + ';' };
+    });
+    const podium = [1, 0, 2].map(function (k) {
+      const r = rows[k]; const first = k === 0;
+      return Object.assign({}, r, {
+        card: 'background: #FFFFFF; border: 1px solid ' + (first ? '#C99A1E' : '#E3E7E4') + '; border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: ' + (first ? '18px 6px 14px' : '12px 6px') + ';' + (first ? ' box-shadow: 0 0 0 3px #FBF1D2;' : ''),
+        posStyle: 'font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 10px; ' + (first ? 'background: #F6E3A3; color: #6B4E0A;' : 'background: #EEF1EF; color: #3A4540;')
+      });
+    });
+    const tabs = ['Total', 'Jueves 5'].map(function (l, i) {
+      const on = self.state.tab === i;
+      return { label: l, pick: function () { self.setState({ tab: i }); },
+        style: 'height: 38px; border-radius: 9px; border: 0; font: inherit; font-size: 14px; cursor: pointer; ' + (on ? 'background: #FFFFFF; color: #16201B; font-weight: 700; box-shadow: 0 1px 2px rgba(22,32,27,0.12);' : 'background: transparent; color: #5B6660; font-weight: 500;') };
+    });
+    return { tabs: tabs, rows: rows, podium: podium, isTotal: this.state.tab === 0, isDay: this.state.tab === 1, goDay: function () { self.setState({ tab: 1 }); } };
+  }
+}
+</script>
+</body>
+</html>

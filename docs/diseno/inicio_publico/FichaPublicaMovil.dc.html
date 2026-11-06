@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Ficha del equipo – público – celular</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 1900px; background: #F4F6F4; font-family: Inter, system-ui, sans-serif; color: #16201B">
+
+  <header style="background: #FFFFFF; border-bottom: 1px solid #E3E7E4; height: 60px; padding: 0 8px; display: flex; align-items: center; gap: 4px">
+    <a href="RankingPublicoMovil.dc.html" aria-label="Volver al ranking" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16201B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+    </a>
+    <span style="flex: 1; font-size: 16px; font-weight: 700">Ranking del jueves</span>
+  </header>
+
+  <main style="padding: 16px; display: flex; flex-direction: column; gap: 14px">
+    <section style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 20px; padding: 18px; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; align-items: center; gap: 14px">
+        <span aria-hidden="true" style="width: 52px; height: 52px; border-radius: 15px; background: #3F7A2A; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800">IA</span>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px">
+          <h1 style="margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.2">Ingeniería Ambiental</h1>
+          <span style="align-self: flex-start; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 9px; background: #F6E3A3; color: #6B4E0A">1° de 12 · jueves</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 8px">
+        <span style="font-size: 38px; font-weight: 800; letter-spacing: -1px; line-height: 1">{{total}}</span>
+        <span style="font-size: 13px; color: #5B6660">de {{max}} pts · {{pct}}%</span>
+      </div>
+      <div aria-hidden="true" style="display: flex; height: 10px; border-radius: 5px; background: #EEF1EF; overflow: hidden">
+        <span style="height: 10px; background: #0E7C59; width: {{wR}}%"></span><span style="height: 10px; background: #2E6FA8; width: {{wA}}%"></span>
+      </div>
+      <div style="display: flex; gap: 6px; overflow-x: auto">
+        <span style="flex-shrink: 0; height: 34px; padding: 0 12px; border-radius: 10px; background: #0E7C59; color: #FFFFFF; display: flex; align-items: center; font-size: 13px; font-weight: 600">Jueves 5</span>
+        <span style="flex-shrink: 0; height: 34px; padding: 0 12px; border-radius: 10px; border: 1px dashed #DCE1DD; color: #8A948E; display: flex; align-items: center; font-size: 13px; font-weight: 600">Viernes · no publicado</span>
+      </div>
+    </section>
+
+    <section style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+      <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 14px; padding: 12px"><span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #5B6660"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 3px; background: #0E7C59"></span>Criterios</span><span style="font-size: 20px; font-weight: 800">{{rub}}</span><span style="font-size: 12px; color: #5B6660"> / {{rubMax}}</span></div>
+      <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 14px; padding: 12px"><span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #5B6660"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 3px; background: #2E6FA8"></span>Actividades</span><span style="font-size: 20px; font-weight: 800">{{act}}</span><span style="font-size: 12px; color: #5B6660"> / {{actMax}}</span></div>
+      <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 14px; padding: 12px"><span style="display: block; font-size: 12px; color: #5B6660">Bonus</span><span style="font-size: 20px; font-weight: 800; color: #8A948E">0</span></div>
+      <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 14px; padding: 12px"><span style="display: block; font-size: 12px; color: #5B6660">Deméritos</span><span style="font-size: 20px; font-weight: 800; color: #8A948E">0</span></div>
+    </section>
+
+    <h2 style="margin: 6px 2px 0; font-size: 18px; font-weight: 800">Detalle por criterio</h2>
+    <sc-for list="{{groups}}" as="g" hint-placeholder-count="5">
+      <section style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; overflow: hidden">
+        <button onClick="{{g.toggle}}" aria-expanded="{{g.open}}" style="width: 100%; min-height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border: 0; background: #FFFFFF; font: inherit; color: #16201B; cursor: pointer; text-align: left">
+          <span style="flex: 1; font-size: 14px; font-weight: 700">{{g.name}}</span>
+          <span style="font-size: 14px; font-weight: 700">{{g.sum}}<span style="font-weight: 500; color: #8A948E"> / {{g.max}}</span></span>
+          <span style="{{g.chev}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A948E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+        </button>
+        <sc-if value="{{g.open}}" hint-placeholder-val="{{ true }}">
+          <sc-for list="{{g.rows}}" as="r" hint-placeholder-count="3">
+            <div style="border-top: 1px solid #EEF1EF; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px">
+              <span style="display: flex; justify-content: space-between; gap: 10px"><span style="font-size: 14px">{{r.name}}</span><span style="font-size: 14px; font-weight: 700; color: {{r.color}}; white-space: nowrap">{{r.score}}<span style="font-weight: 500; color: #8A948E"> / {{r.max}}</span></span></span>
+              <span aria-hidden="true" style="height: 6px; border-radius: 3px; background: #EEF1EF; overflow: hidden"><span style="display: block; height: 6px; border-radius: 3px; background: {{r.barColor}}; width: {{r.pct}}%"></span></span>
+            </div>
+          </sc-for>
+        </sc-if>
+      </section>
+    </sc-for>
+    <p style="margin: 4px 0 0; font-size: 12px; color: #5B6660; text-align: center">Solo resultados validados y publicados.</p>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1900}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { closed: { 3: true } }; }
+  renderVals() {
+    const self = this;
+    const G = [
+      { name: 'Armado del campamento', rows: [['Carpas', 50, 50], ['Cerco', 50, 50], ['Portada', 50, 50]] },
+      { name: 'Orden y cocina', rows: [['Orden y limpieza interior', 50, 50], ['Orden y limpieza exterior', 50, 50], ['Cocina y orden', 75, 100], ['Utiliza alimentos permitidos', 100, 100]] },
+      { name: 'Ceremonias y conducta', rows: [['Izamiento', 100, 100], ['Barras de la mañana', 50, 50], ['Barras de la noche', 50, 50], ['Respeta el toque de queda', 100, 100]] },
+      { name: 'Liderazgo', rows: [['Involucra a todos los participantes', 87.5, 100], ['Participa como EP', 100, 100]] },
+      { name: 'Actividades', rows: [['Programa Apertura y Estelar 1', null, 250]] }
+    ];
+    const fmt = function (v) { return String(v).replace('.', ','); };
+    let rub = 0, rubMax = 0, act = 0, actMax = 0;
+    const groups = G.map(function (g, gi) {
+      let s = 0, m = 0;
+      const rows = g.rows.map(function (r) {
+        const pend = r[1] === null; const v = pend ? 0 : r[1];
+        s += v; m += r[2];
+        if (g.name === 'Actividades') { act += v; actMax += r[2]; } else { rub += v; rubMax += r[2]; }
+        const pct = pend ? 0 : Math.round(v / r[2] * 100);
+        return { name: r[0], max: fmt(r[2]), score: pend ? 'Pendiente' : fmt(v), pct: pct, color: pend ? '#7A4F00' : '#16201B', barColor: pct === 100 ? '#0E7C59' : (pct >= 50 ? '#5FAF8A' : '#E0A43A') };
+      });
+      const open = !self.state.closed[gi];
+      return { name: g.name, rows: rows, sum: fmt(s), max: fmt(m), open: open,
+        chev: 'display: flex; transform: rotate(' + (open ? 180 : 0) + 'deg);',
+        toggle: function () { const c = Object.assign({}, self.state.closed); c[gi] = !c[gi]; self.setState({ closed: c }); } };
+    });
+    const total = rub + act, max = rubMax + actMax;
+    return { groups: groups, total: fmt(total), max: max, pct: Math.round(total / max * 100), rub: fmt(rub), rubMax: rubMax, act: act, actMax: actMax, wR: rub / max * 100, wA: act / max * 100 };
+  }
+}
+</script>
+</body>
+</html>

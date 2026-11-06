@@ -26,7 +26,9 @@
       "Bash(find /d/Projects/lider-camp/src/modules/observaciones -type f -name *.ts -o -name *.vue -o -name *.js)",
       "Bash(find /d/Projects/lider-camp/src/modules/criterios -type f -name *.ts -o -name *.vue -o -name *.js)",
       "Bash(node:*)",
-      "Bash(find /d/Projects/lider-camp/docs/diseno -type f -exec basename {})"
+      "Bash(find /d/Projects/lider-camp/docs/diseno -type f -exec basename {})",
+      "Bash(find /d/Projects/lider-camp/src -name *puntajes* -o -name *ranking*publico*)",
+      "Bash(find /d/Projects/lider-camp/supabase -type f -name *.sql)"
     ]
   }
 }

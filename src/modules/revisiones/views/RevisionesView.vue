@@ -38,10 +38,9 @@ const detError    = ref('')
 const detUrls     = ref<Record<string, string>>({})
 
 // ── Review state ─────────────────────────────────────────────────────────────
-const descargo    = ref('')
-const checks      = ref([false, false, false, false])
-const accionando  = ref(false)
-const accionError = ref('')
+const comentarioAdmin = ref('')
+const accionando      = ref(false)
+const accionError     = ref('')
 
 // ── Reject dialog ─────────────────────────────────────────────────────────────
 const rejectOpen = ref(false)
@@ -141,13 +140,12 @@ function estadoCfg(e: string) { return ESTADO_CFG[e] ?? { label: e, cls: 'bg-[#E
 // ── Selection ─────────────────────────────────────────────────────────────────
 async function seleccionar(id: string) {
   if (selectedId.value === id) return
-  selectedId.value  = id
-  detalle.value     = null
-  detUrls.value     = {}
-  detError.value    = ''
-  checks.value      = [false, false, false, false]
-  descargo.value    = ''
-  accionError.value = ''
+  selectedId.value      = id
+  detalle.value         = null
+  detUrls.value         = {}
+  detError.value        = ''
+  comentarioAdmin.value = ''
+  accionError.value     = ''
   rejectOpen.value  = false
 
   detCargando.value = true
@@ -196,11 +194,12 @@ function updateLista(actualizado: Incidencia) {
 }
 
 async function validar() {
-  if (!detalle.value || !checks.value.every(Boolean)) return
+  if (!detalle.value) return
   accionando.value  = true
   accionError.value = ''
   try {
-    const actualizado = await incidenciasService.validar(detalle.value.id, 'Verificaciones completadas.')
+    const motivo = comentarioAdmin.value.trim() || null
+    const actualizado = await incidenciasService.validar(detalle.value.id, motivo)
     updateLista(actualizado)
     revStore.cntPendiente = Math.max(0, revStore.cntPendiente - 1)
     irSiguientePendiente()
@@ -239,7 +238,7 @@ async function reabrir() {
     })
     updateLista(actualizado)
     revStore.cntPendiente += 1
-    checks.value = [false, false, false, false]
+    comentarioAdmin.value = ''
   } catch (e: any) {
     accionError.value = e.message ?? 'Error al reabrir'
   } finally {
@@ -250,8 +249,6 @@ async function reabrir() {
 // ── Tab state: for pending, also show if selected is pending ──────────────────
 const selectedEstado = computed(() => detalle.value?.estado ?? lista.value.find(i => i.id === selectedId.value)?.estado ?? null)
 const selectedIsPending = computed(() => selectedEstado.value === 'registrado' || selectedEstado.value === 'descargo')
-const checksOk = computed(() => checks.value.every(Boolean))
-const nChecks  = computed(() => checks.value.filter(Boolean).length)
 </script>
 
 <template>
@@ -423,15 +420,13 @@ const nChecks  = computed(() => checks.value.filter(Boolean).length)
         :cargando="detCargando"
         :error="detError"
         :det-urls="detUrls"
-        :checks="checks"
-        :descargo="descargo"
+        :comentario-admin="comentarioAdmin"
         :accionando="accionando"
         :accion-error="accionError"
         :pend-pos="pendPos"
         :tipo-de="tipoDe"
         :nombre-equipo="nombreEquipo"
-        @update:checks="checks = $event"
-        @update:descargo="descargo = $event"
+        @update:comentario-admin="comentarioAdmin = $event"
         @validar="validar"
         @abrir-rechazo="rejectOpen = true"
         @reabrir="reabrir"
@@ -479,15 +474,13 @@ const nChecks  = computed(() => checks.value.filter(Boolean).length)
         :cargando="detCargando"
         :error="detError"
         :det-urls="detUrls"
-        :checks="checks"
-        :descargo="descargo"
+        :comentario-admin="comentarioAdmin"
         :accionando="accionando"
         :accion-error="accionError"
         :pend-pos="pendPos"
         :tipo-de="tipoDe"
         :nombre-equipo="nombreEquipo"
-        @update:checks="checks = $event"
-        @update:descargo="descargo = $event"
+        @update:comentario-admin="comentarioAdmin = $event"
         @validar="validar"
         @abrir-rechazo="rejectOpen = true"
         @reabrir="reabrir"
@@ -506,15 +499,11 @@ const nChecks  = computed(() => checks.value.filter(Boolean).length)
             @click="rejectOpen = true"
           >Rechazar</button>
           <button
-            class="flex-[2] h-[50px] rounded-[14px] border-0 text-[15px] font-semibold text-white transition-colors disabled:opacity-50"
-            :class="checksOk ? 'bg-[#0E7C59]' : 'bg-[#9BCFB5] cursor-not-allowed'"
-            :disabled="!checksOk || accionando"
+            class="flex-[2] h-[50px] rounded-[14px] border-0 bg-[#0E7C59] text-[15px] font-semibold text-white transition-colors disabled:opacity-50"
+            :disabled="accionando"
             @click="validar"
           >Validar</button>
         </div>
-        <p class="text-[12px] text-center text-[#5B6660]">
-          {{ checksOk ? 'Todo verificado. Puedes validar.' : `Verificaciones: ${nChecks} de 4` }}
-        </p>
       </footer>
     </div>
   </Transition>

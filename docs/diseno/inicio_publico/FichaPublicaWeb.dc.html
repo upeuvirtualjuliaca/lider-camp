@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Ficha del equipo – público</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="min-height: 1500px; background: #F4F6F4; font-family: Inter, system-ui, sans-serif; color: #16201B; display: flex; flex-direction: column">
+
+  <header style="background: #FFFFFF; border-bottom: 1px solid #E3E7E4">
+    <div style="max-width: 1200px; margin: 0 auto; padding: 0 24px; height: 64px; display: flex; align-items: center; gap: 24px">
+      <a href="InicioPublicoWeb.dc.html" style="display: flex; align-items: center; gap: 10px; margin-right: auto">
+        <span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 10px; background: #0E7C59; display: flex; align-items: center; justify-content: center">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18L12 4 3 20z"></path><path d="M10 20l2-4 2 4"></path></svg>
+        </span>
+        <span style="font-size: 17px; font-weight: 800">LiderCamp <span style="font-weight: 500; color: #5B6660">2026-II</span></span>
+      </a>
+      <nav aria-label="Secciones" style="display: flex; gap: 4px; flex-wrap: wrap">
+        <a href="RankingPublicoWeb.dc.html" aria-current="page" style="height: 40px; padding: 0 14px; border-radius: 10px; display: flex; align-items: center; font-size: 14px; font-weight: 600; background: #E1F3EA; color: #0B6B4B">Ranking</a>
+        <a href="#" style="height: 40px; padding: 0 14px; border-radius: 10px; display: flex; align-items: center; font-size: 14px; font-weight: 600">Calendario</a>
+        <a href="#" style="height: 40px; padding: 0 14px; border-radius: 10px; display: flex; align-items: center; font-size: 14px; font-weight: 600">Reglas</a>
+      </nav>
+      <a href="#" style="height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid #DCE1DD; display: flex; align-items: center; font-size: 14px; font-weight: 600">Ingresar</a>
+    </div>
+  </header>
+
+  <main style="width: 100%; max-width: 1040px; margin: 0 auto; padding: 24px 24px 56px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px">
+    <a href="RankingPublicoWeb.dc.html" style="align-self: flex-start; height: 36px; padding: 0 12px 0 8px; border-radius: 10px; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: #0B6B4B">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Ranking del jueves</a>
+
+    <section style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 18px">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 18px">
+        <span aria-hidden="true" style="width: 64px; height: 64px; border-radius: 18px; background: #3F7A2A; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800">IA</span>
+        <div style="flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 6px">
+          <h1 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.6px">Ingeniería Ambiental</h1>
+          <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+            <span style="font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 10px; background: #F6E3A3; color: #6B4E0A">1° del jueves</span>
+            <span style="font-size: 13px; color: #5B6660">de 12 escuelas</span>
+          </span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px">
+          <span style="font-size: 40px; font-weight: 800; letter-spacing: -1px; line-height: 1">{{total}}</span>
+          <span style="font-size: 13px; color: #5B6660">de {{max}} pts posibles · {{pct}}%</span>
+        </div>
+      </div>
+      <div style="display: flex; height: 10px; border-radius: 5px; background: #EEF1EF; overflow: hidden" aria-hidden="true">
+        <span style="height: 10px; background: #0E7C59; width: {{wR}}%"></span><span style="height: 10px; background: #2E6FA8; width: {{wA}}%"></span>
+      </div>
+      <div role="tablist" aria-label="Día" style="display: flex; flex-wrap: wrap; gap: 6px">
+        <button role="tab" aria-selected="true" style="height: 38px; padding: 0 14px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; background: #0E7C59; color: #FFFFFF; border: 1px solid #0E7C59">Jueves 5</button>
+        <button role="tab" disabled style="height: 38px; padding: 0 14px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; background: #FFFFFF; color: #8A948E; border: 1px dashed #DCE1DD">Viernes · aún no publicado</button>
+      </div>
+    </section>
+
+    <section aria-label="Resumen" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px">
+      <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 4px">
+        <span style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #5B6660"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 3px; background: #0E7C59"></span>Criterios del día</span>
+        <span style="font-size: 24px; font-weight: 800">{{rub}} <span style="font-size: 13px; font-weight: 500; color: #5B6660">/ {{rubMax}}</span></span>
+      </div>
+      <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 4px">
+        <span style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #5B6660"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 3px; background: #2E6FA8"></span>Actividades</span>
+        <span style="font-size: 24px; font-weight: 800">{{act}} <span style="font-size: 13px; font-weight: 500; color: #5B6660">/ {{actMax}}</span></span>
+        <span style="font-size: 12px; color: #7A4F00; font-weight: 600">Programa estelar pendiente de publicar</span>
+      </div>
+      <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 13px; color: #5B6660">Bonus</span>
+        <span style="font-size: 24px; font-weight: 800; color: #8A948E">0</span>
+        <span style="font-size: 12px; color: #5B6660">Sin bonus este día</span>
+      </div>
+      <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 13px; color: #5B6660">Deméritos</span>
+        <span style="font-size: 24px; font-weight: 800; color: #8A948E">0</span>
+        <span style="font-size: 12px; color: #5B6660">Sin deméritos este día</span>
+      </div>
+    </section>
+
+    <section aria-label="Detalle por criterio" style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 20px; overflow: hidden">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #EEF1EF">
+        <h2 style="margin: 0; font-size: 17px; font-weight: 800">Detalle por criterio</h2>
+        <span style="font-size: 12px; color: #5B6660">Puntaje obtenido / máximo</span>
+      </div>
+      <sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+        <div style="border-bottom: 1px solid #EEF1EF">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; padding: 14px 20px 6px">
+            <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #5B6660">{{g.name}}</span>
+            <span style="font-size: 13px; font-weight: 700">{{g.sum}} <span style="font-weight: 500; color: #5B6660">/ {{g.max}}</span></span>
+          </div>
+          <sc-for list="{{g.rows}}" as="r" hint-placeholder-count="3">
+            <div style="display: grid; grid-template-columns: minmax(160px, 1fr) minmax(120px, 220px) 96px; gap: 16px; align-items: center; padding: 10px 20px; min-height: 44px; box-sizing: border-box">
+              <span style="font-size: 14px; font-weight: 500">{{r.name}}</span>
+              <span aria-hidden="true" style="height: 8px; border-radius: 4px; background: #EEF1EF; overflow: hidden"><span style="display: block; height: 8px; border-radius: 4px; background: {{r.barColor}}; width: {{r.pct}}%"></span></span>
+              <span style="text-align: right; font-size: 14px; font-weight: 700; color: {{r.color}}">{{r.score}} <span style="font-weight: 500; color: #8A948E">/ {{r.max}}</span></span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </section>
+    <p style="margin: 0; font-size: 13px; color: #5B6660; text-align: center">Solo se muestran resultados validados y publicados. El detalle de bonus y deméritos se muestra por código, sin datos personales.</p>
+  </main>
+
+  <footer style="margin-top: auto; background: #10261D; color: rgba(255,255,255,0.8)">
+    <div style="max-width: 1200px; margin: 0 auto; padding: 24px; display: flex; justify-content: space-between; font-size: 13px"><span style="font-weight: 700; color: #FFFFFF">LiderCamp 2026-II</span><span>[Logo UPeU]</span></div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const G = [
+      { name: 'Armado del campamento', rows: [['Carpas', 50, 50], ['Cerco', 50, 50], ['Portada', 50, 50]] },
+      { name: 'Orden y cocina', rows: [['Orden y limpieza interior', 50, 50], ['Orden y limpieza exterior', 50, 50], ['Cocina y orden', 75, 100], ['Utiliza alimentos permitidos', 100, 100]] },
+      { name: 'Ceremonias y conducta', rows: [['Izamiento', 100, 100], ['Barras de la mañana', 50, 50], ['Barras de la noche', 50, 50], ['Respeta el toque de queda', 100, 100]] },
+      { name: 'Liderazgo', rows: [['Involucra a todos los participantes', 87.5, 100], ['Participa como EP', 100, 100]] },
+      { name: 'Actividades', rows: [['Programa Apertura y Estelar 1', null, 250]] }
+    ];
+    const fmt = function (v) { return String(v).replace('.', ','); };
+    let rub = 0, rubMax = 0, act = 0, actMax = 0;
+    const groups = G.map(function (g) {
+      let s = 0, m = 0;
+      const rows = g.rows.map(function (r) {
+        const pend = r[1] === null;
+        const v = pend ? 0 : r[1];
+        s += v; m += r[2];
+        if (g.name === 'Actividades') { act += v; actMax += r[2]; } else { rub += v; rubMax += r[2]; }
+        const pct = pend ? 0 : Math.round(v / r[2] * 100);
+        return { name: r[0], max: fmt(r[2]), score: pend ? 'Pendiente' : fmt(v), pct: pct,
+          color: pend ? '#7A4F00' : '#16201B', barColor: pct === 100 ? '#0E7C59' : (pct >= 50 ? '#5FAF8A' : '#E0A43A') };
+      });
+      return { name: g.name, rows: rows, sum: fmt(s), max: fmt(m) };
+    });
+    const total = rub + act, max = rubMax + actMax;
+    return {
+      groups: groups, total: fmt(total), max: max, pct: Math.round(total / max * 100),
+      rub: fmt(rub), rubMax: rubMax, act: act, actMax: actMax,
+      wR: rub / max * 100, wA: act / max * 100
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>LiderCamp – inicio público – celular</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}a:hover{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; min-height: 3000px; background: #FFFFFF; font-family: Inter, system-ui, sans-serif; color: #16201B">
+
+  <header style="background: #FFFFFF; border-bottom: 1px solid #E3E7E4; height: 60px; padding: 0 12px 0 16px; display: flex; align-items: center; gap: 10px">
+    <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 9px; background: #0E7C59; display: flex; align-items: center; justify-content: center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18L12 4 3 20z"></path><path d="M10 20l2-4 2 4"></path></svg>
+    </span>
+    <span style="flex: 1; font-size: 16px; font-weight: 800">LiderCamp <span style="font-weight: 500; color: #5B6660">2026-II</span></span>
+    <a href="#" style="height: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid #DCE1DD; display: flex; align-items: center; font-size: 13px; font-weight: 600">Ingresar</a>
+    <button aria-label="Abrir menú" style="width: 44px; height: 44px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; color: #16201B">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+    </button>
+  </header>
+
+  <section style="background: #10261D; color: #FFFFFF; padding: 36px 20px 28px; display: flex; flex-direction: column; gap: 16px">
+    <span style="align-self: flex-start; display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 14px; background: rgba(255,255,255,0.12); font-size: 12px; font-weight: 600">
+      <span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #4CD08F"></span>En curso · Día 2 de 4</span>
+    <span style="font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #F2C14E">Edición Victoria</span>
+    <h1 style="margin: 0; font-size: 36px; line-height: 1.08; font-weight: 800; letter-spacing: -1px">Creados para grandes hazañas</h1>
+    <p style="margin: 0; font-size: 16px; line-height: 1.55; color: rgba(255,255,255,0.85)">Sigue en vivo el desempeño de tu escuela y el ranking oficial del campamento.</p>
+    <a href="RankingPublicoMovil.dc.html" style="height: 52px; border-radius: 14px; background: #FFFFFF; color: #0B6B4B; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 16px; font-weight: 700">Ver ranking</a>
+    <a href="#" style="height: 50px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600">¿Qué se evalúa hoy?</a>
+    <span style="font-size: 11px; color: rgba(255,255,255,0.45); text-align: center">[Foto aérea del campamento de fondo · overlay oscuro]</span>
+  </section>
+
+  <section style="padding: 20px 16px 8px; margin-top: -4px">
+    <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 4px 16px rgba(22,32,27,0.06)">
+      <div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 15px; font-weight: 700">Top 3</span><span style="font-size: 12px; color: #5B6660">Hasta el jueves</span></div>
+      <sc-for list="{{top}}" as="t" hint-placeholder-count="3">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <span style="{{t.posStyle}}">{{t.pos}}°</span>
+          <span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 10px; background: {{t.color}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700">{{t.initials}}</span>
+          <span style="flex: 1; font-size: 14px; font-weight: 600">{{t.name}}</span>
+          <span style="font-size: 16px; font-weight: 800">{{t.pts}}</span>
+        </div>
+      </sc-for>
+      <a href="RankingPublicoMovil.dc.html" style="height: 44px; border-radius: 12px; background: #F4F6F4; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: #0B6B4B">Ver las 12 escuelas</a>
+    </div>
+  </section>
+
+  <section style="padding: 24px 16px; display: flex; flex-direction: column; gap: 12px">
+    <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #0B6B4B">Hoy · Viernes 6</span>
+    <h2 style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px">Esto se evalúa hoy</h2>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px">
+      <sc-for list="{{today}}" as="c" hint-placeholder-count="8">
+        <span style="height: 34px; padding: 0 12px; border-radius: 17px; background: #F4F6F4; border: 1px solid #E3E7E4; display: flex; align-items: center; font-size: 13px; font-weight: 500">{{c}}</span>
+      </sc-for>
+    </div>
+    <div style="background: #F4F6F4; border-radius: 16px; padding: 14px; display: flex; align-items: center; gap: 12px; margin-top: 6px">
+      <span style="width: 56px; height: 56px; border-radius: 14px; background: #E1F3EA; color: #0B6B4B; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800">19:30</span>
+      <span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5B6660">Próxima actividad</span><span style="font-size: 16px; font-weight: 700">Programa estelar 2</span><span style="font-size: 13px; color: #5B6660">Auditorio central</span></span>
+    </div>
+    <a href="#" style="font-size: 14px; font-weight: 600; color: #0B6B4B">Ver calendario completo →</a>
+  </section>
+
+  <section style="background: #F4F6F4; padding: 32px 16px; display: flex; flex-direction: column; gap: 14px">
+    <h2 style="margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px">¿Cómo se gana LiderCamp?</h2>
+    <sc-for list="{{steps}}" as="s" hint-placeholder-count="4">
+      <div style="background: #FFFFFF; border: 1px solid #E3E7E4; border-radius: 16px; padding: 16px; display: flex; gap: 14px">
+        <span style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 10px; background: #E1F3EA; color: #0B6B4B; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800">{{s.n}}</span>
+        <span style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 16px; font-weight: 700">{{s.title}}</span><span style="font-size: 14px; line-height: 1.5; color: #5B6660">{{s.text}}</span></span>
+      </div>
+    </sc-for>
+  </section>
+
+  <section style="padding: 32px 16px; display: flex; flex-direction: column; gap: 12px">
+    <h2 style="margin: 0; font-size: 22px; font-weight: 800">Medallas al cierre</h2>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+      <sc-for list="{{medals}}" as="m" hint-placeholder-count="4">
+        <div style="border: 1px solid #E3E7E4; border-radius: 14px; padding: 12px; display: flex; align-items: center; gap: 10px">
+          <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 50%; background: {{m.bg}}; border: 3px solid {{m.ring}}; box-sizing: border-box; flex-shrink: 0"></span>
+          <span style="font-size: 14px; font-weight: 700">{{m.name}}</span>
+        </div>
+      </sc-for>
+    </div>
+    <a href="#" style="height: 48px; border-radius: 12px; border: 1px solid #DCE1DD; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600">Leer las reglas</a>
+  </section>
+
+  <section style="border-top: 1px solid #E3E7E4; padding: 24px 16px; display: flex; flex-direction: column; gap: 10px">
+    <span style="font-size: 15px; font-weight: 700">¿Eres evaluador o administrador?</span>
+    <a href="#" style="height: 48px; border-radius: 12px; background: #0E7C59; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600">Ingresar al panel</a>
+  </section>
+
+  <footer style="background: #10261D; color: rgba(255,255,255,0.8); padding: 22px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 12px">
+    <span style="font-weight: 700; color: #FFFFFF">LiderCamp 2026-II</span><span>[Logo UPeU]</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":3000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const ps = function (p) { return 'width: 26px; font-size: 15px; font-weight: 800; color: ' + (p === 1 ? '#0B6B4B' : '#5B6660') + ';'; };
+    return {
+      top: [
+        { pos: 1, posStyle: ps(1), initials: 'IA', name: 'Ing. Ambiental', color: '#3F7A2A', pts: '812' },
+        { pos: 2, posStyle: ps(2), initials: 'AD', name: 'Administración', color: '#1F6FB2', pts: '798' },
+        { pos: 3, posStyle: ps(3), initials: 'DE', name: 'Derecho', color: '#2E5E8C', pts: '790' }
+      ],
+      today: ['Carpas', 'Cerco', 'Portada', 'Orden y limpieza', 'Cocina y menú', 'Izamiento', 'Barras de la mañana', 'Liderazgo'],
+      steps: [
+        { n: '1', title: 'Criterios diarios', text: 'Carpas, orden, cocina, ceremonias y más, con una rúbrica de 5 niveles.' },
+        { n: '2', title: 'Liderazgo y asistencia', text: 'Cuatro indicadores de liderazgo por día y meta del 95 % de asistencia.' },
+        { n: '3', title: 'Bonus y deméritos', text: 'El servicio extraordinario suma; el ruido o el uso de recursos ajenos restan.' },
+        { n: '4', title: 'Ranking y medallas', text: 'El puntaje se convierte a escala de 1000 y define la medalla al cierre.' }
+      ],
+      medals: [
+        { name: 'Oro', bg: '#F6E3A3', ring: '#C99A1E' }, { name: 'Plata', bg: '#E6E9EC', ring: '#9AA3AB' },
+        { name: 'Bronce', bg: '#F1D2B8', ring: '#B06A35' }, { name: 'Participación', bg: '#E1F3EA', ring: '#5FAF8A' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

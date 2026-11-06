@@ -122,7 +122,7 @@ function isActive(item: NavItem) {
   return item.to === '/panel' ? route.path === '/panel' : route.path.startsWith(item.to)
 }
 
-async function cerrarSesion() { await session.logout(); router.push('/login') }
+async function cerrarSesion() { await session.logout(); router.push('/') }
 function navegar(to: string)  { menuAbierto.value = false; router.push(to) }
 </script>
 

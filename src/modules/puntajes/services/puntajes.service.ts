@@ -64,6 +64,16 @@ export const rankingDiarioPublicoService = {
     if (error) throw error
     return (data ?? []) as PublicoRankingDia[]
   },
+
+  async getPorEquipo(equipoId: string): Promise<PublicoRankingDia[]> {
+    const { data, error } = await (supabase as any)
+      .from('publico_ranking_dia')
+      .select('*')
+      .eq('equipo_id', equipoId)
+      .order('momento')
+    if (error) throw error
+    return (data ?? []) as PublicoRankingDia[]
+  },
 }
 
 // Ranking total final — solo cuando campamento.cerrado = true
@@ -92,6 +102,30 @@ export const rankingTotalPublicoService = {
     const { data, error } = await (q as any)
     if (error) throw error
     return (data ?? []) as PublicoRankingTotal[]
+  },
+}
+
+export interface RubricaDiaFila {
+  equipo_id: string
+  campamento_id: string
+  criterio_codigo: string
+  criterio_nombre: string
+  orden: number
+  momento: string
+  puntaje: number
+  puntaje_max: number
+}
+
+export const rubricaDiaPublicaService = {
+  async getPorEquipoDia(equipoId: string, momento: string): Promise<RubricaDiaFila[]> {
+    const { data, error } = await (supabase as any)
+      .from('publico_rubrica_dia')
+      .select('equipo_id,campamento_id,criterio_codigo,criterio_nombre,orden,momento,puntaje,puntaje_max')
+      .eq('equipo_id', equipoId)
+      .eq('momento', momento)
+      .order('orden')
+    if (error) throw error
+    return (data ?? []) as RubricaDiaFila[]
   },
 }
 
